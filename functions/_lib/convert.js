@@ -22,11 +22,21 @@ export async function fetchSubscription(url, userAgent) {
     headers: {
       'User-Agent': ua,
       'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
     },
+    redirect: 'follow',
   });
 
   if (!resp.ok) {
-    throw new Error(`Failed to fetch subscription: ${resp.status} ${resp.statusText}`);
+    // Try to read response body for better error diagnostics
+    let bodySnippet = '';
+    try {
+      const body = await resp.text();
+      bodySnippet = body ? ` | Body: ${body.slice(0, 200)}` : '';
+    } catch { /* ignore */ }
+    throw new Error(`Failed to fetch subscription: ${resp.status} ${resp.statusText}${bodySnippet}`);
   }
 
   const content = await resp.text();
