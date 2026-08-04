@@ -104,8 +104,9 @@ export async function processSubscriptionRequest(kv, path) {
     return { error: 500, message: `Conversion failed: ${e.message}` };
   }
 
-  // Update access count (fire and forget)
-  incrementAccess(kv, path);
+  // Update access count (must await — Cloudflare runtime may terminate
+  // the worker before unawaited promises complete)
+  await incrementAccess(kv, path);
 
   return {
     content: result.content,
