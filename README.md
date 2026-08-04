@@ -58,12 +58,7 @@ npm install
 npx wrangler kv namespace create SUBCONVERT_KV
 ```
 
-复制 `wrangler.toml.example` 为 `wrangler.toml`，将输出的 `id` 填入其中：
-
-```bash
-cp wrangler.toml.example wrangler.toml
-# 编辑 wrangler.toml，替换 REPLACE_WITH_YOUR_KV_ID
-```
+将输出的 `id` 填入 `wrangler.toml` 中，替换 `REPLACE_WITH_YOUR_KV_ID`。
 
 ### 3. 本地开发
 
@@ -157,7 +152,7 @@ subconvert/
 ├── package.json
 ├── deploy.js                   # 部署脚本（清除代理环境变量）
 ├── dev.js                      # 本地开发启动脚本（清除代理环境变量）
-├── wrangler.toml.example       # 配置模板（复制为 wrangler.toml 并填入 KV ID）
+├── wrangler.toml               # Cloudflare Pages 配置（需填入你的 KV ID）
 ├── LICENSE
 └── README.md
 ```
