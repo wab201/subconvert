@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SubConvert - 代理订阅转换</title>
+  <meta name="description" content="自托管的代理订阅转换工具，支持 Clash/Sing-box/V2Ray 等格式互转">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔄</text></svg>">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo">
+          <span class="logo-icon">🔄</span>
+          <div>
+            <h1>SubConvert</h1>
+            <p class="tagline">代理订阅转换 · 自托管 · 零泄漏</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-ghost" id="btnRefresh" title="刷新列表">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- Create Section -->
+      <section class="card create-card">
+        <div class="card-header">
+          <h2>创建转换链接</h2>
+          <p>输入源订阅 URL，选择目标格式，生成转换后的订阅链接</p>
+        </div>
+        <form id="convertForm" class="convert-form">
+          <div class="form-group">
+            <label for="sourceUrl">源订阅 URL <span class="required">*</span></label>
+            <input type="url" id="sourceUrl" name="sourceUrl" placeholder="https://example.com/subscribe/..." required>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="targetFormat">目标格式 <span class="required">*</span></label>
+              <select id="targetFormat" name="targetFormat" required>
+                <option value="clash">Clash / Mihomo (YAML)</option>
+                <option value="singbox">Sing-Box (JSON)</option>
+                <option value="base64">V2Ray (Base64)</option>
+                <option value="plain">Plain Text (URI 列表)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="customPath">自定义路径</label>
+              <div class="path-input-wrapper">
+                <span class="path-prefix">/sub/</span>
+                <input type="text" id="customPath" name="customPath" placeholder="留空则自动生成" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="name">备注名称</label>
+              <input type="text" id="name" name="name" placeholder="可选" autocomplete="off">
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="btnSubmit">
+            <span class="btn-text">生成转换链接</span>
+            <span class="btn-loading" hidden>
+              <svg class="spinner" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
+            </span>
+          </button>
+        </form>
+      </section>
+
+      <!-- Links Section -->
+      <section class="card links-card">
+        <div class="card-header">
+          <h2>转换链接管理</h2>
+          <p id="linkCount">共 0 条链接</p>
+        </div>
+        <div class="links-table-wrapper" id="linksTableWrapper">
+          <div class="empty-state" id="emptyState">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.3">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            </svg>
+            <p>暂无转换链接</p>
+            <p class="empty-hint">在上方创建你的第一个转换链接</p>
+          </div>
+          <table class="links-table" id="linksTable" hidden>
+            <thead>
+              <tr>
+                <th>备注 / 路径</th>
+                <th>源 URL</th>
+                <th>目标格式</th>
+                <th>订阅链接</th>
+                <th>访问次数</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="linksBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Features Section -->
+      <section class="features">
+        <div class="feature">
+          <div class="feature-icon">🔒</div>
+          <h3>零泄漏</h3>
+          <p>所有转换在 Cloudflare 边缘节点本地执行，不依赖任何第三方转换服务</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">⚡</div>
+          <h3>实时转换</h3>
+          <p>每次访问订阅链接都会拉取最新的源订阅并即时转换</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📦</div>
+          <h3>多格式支持</h3>
+          <p>支持 Clash、Sing-Box、V2Ray Base64、纯文本等多种格式互转</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🌐</div>
+          <h3>多协议支持</h3>
+          <p>SS、VMess、VLESS、Trojan、Hysteria2、TUIC 全协议覆盖</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>SubConvert · 部署于 Cloudflare Pages · <a href="https://github.com" target="_blank">源码</a></p>
+    </footer>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

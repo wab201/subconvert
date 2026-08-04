@@ -1,0 +1,158 @@
+/**
+ * Generate proxy protocol URIs from unified node objects.
+ * Supports: ss, vmess, vless, trojan, hysteria2, tuic
+ */
+
+import { b64Encode, b64UrlEncode, encodeName } from './utils.js';
+
+/** Generate a single proxy URI from a node object */
+export function generateURI(node) {
+  if (!node || !node.type) return '';
+  try {
+    switch (node.type) {
+      case 'ss': return genSS(node);
+      case 'vmess': return genVMess(node);
+      case 'vless': return genVLESS(node);
+      case 'trojan': return genTrojan(node);
+      case 'hysteria2': return genHysteria2(node);
+      case 'tuic': return genTUIC(node);
+    }
+  } catch (e) {
+    console.error('Generate error:', e);
+    return '';
+  }
+  return '';
+}
+
+/** Generate Shadowsocks URI (SIP002 format) */
+function genSS(node) {
+  const userInfo = b64UrlEncode(`${node.cipher}:${node.password}`);
+  const host = node.server.includes(':') ? `[${node.server}]` : node.server;
+  const name = node.name ? `#${encodeName(node.name)}` : '';
+  return `ss://${userInfo}@${host}:${node.port}${name}`;
+}
+
+/** Generate VMess URI */
+function genVMess(node) {
+  const config = {
+    v: '2',
+    ps: node.name || '',
+    add: node.server,
+    port: String(node.port),
+    id: node.uuid,
+    aid: String(node.alterId || 0),
+    scy: node.cipher || 'auto',
+    net: node.network || 'tcp',
+    type: node.grpcMode || 'none',
+    host: node.wsHost || '',
+    path: node.wsPath || node.grpcServiceName || node.h2Path || '',
+    tls: node.tls === 'tls' || node.tls === 'reality' ? node.tls : '',
+    sni: node.sni || '',
+    alpn: node.alpn || '',
+    fp: node.fingerprint || '',
+    verify_cert: node.skipCertVerify ? false : true,
+  };
+
+  // h2 host
+  if (node.network === 'h2' && node.h2Host) {
+    config.host = node.h2Host.join(',');
+  }
+
+  return `vmess://${b64Encode(JSON.stringify(config))}`;
+}
+
+/** Generate VLESS URI */
+function genVLESS(node) {
+  const params = new URLSearchParams();
+  params.set('type', node.network || 'tcp');
+  params.set('encryption', 'none');
+
+  if (node.tls === 'tls') {
+    params.set('security', 'tls');
+    if (node.sni) params.set('sni', node.sni);
+    if (node.fingerprint) params.set('fp', node.fingerprint);
+    if (node.skipCertVerify) params.set('allowInsecure', '1');
+  } else if (node.tls === 'reality') {
+    params.set('security', 'reality');
+    if (node.sni) params.set('sni', node.sni);
+    if (node.fingerprint) params.set('fp', node.fingerprint);
+    if (node.realityPublicKey) params.set('pbk', node.realityPublicKey);
+    if (node.realityShortId) params.set('sid', node.realityShortId);
+  }
+
+  if (node.flow) params.set('flow', node.flow);
+  if (node.alpn) params.set('alpn', Array.isArray(node.alpn) ? node.alpn.join(',') : node.alpn);
+
+  // Transport
+  if (node.network === 'ws') {
+    if (node.wsPath) params.set('path', node.wsPath);
+    if (node.wsHost) params.set('host', node.wsHost);
+  } else if (node.network === 'grpc') {
+    if (node.grpcServiceName) params.set('serviceName', node.grpcServiceName);
+    if (node.grpcMode) params.set('mode', node.grpcMode);
+  } else if (node.network === 'h2') {
+    if (node.h2Host) params.set('host', node.h2Host.join(','));
+    if (node.h2Path) params.set('path', node.h2Path);
+  }
+
+  const name = node.name ? `#${encodeName(node.name)}` : '';
+  const uuid = encodeURIComponent(node.uuid);
+  return `vless://${uuid}@${node.server}:${node.port}?${params.toString()}${name}`;
+}
+
+/** Generate Trojan URI */
+function genTrojan(node) {
+  const params = new URLSearchParams();
+  params.set('type', node.network || 'tcp');
+
+  if (node.sni) params.set('sni', node.sni);
+  if (node.alpn) params.set('alpn', Array.isArray(node.alpn) ? node.alpn.join(',') : node.alpn);
+  if (node.fingerprint) params.set('fp', node.fingerprint);
+  if (node.skipCertVerify) params.set('allowInsecure', '1');
+
+  // Transport
+  if (node.network === 'ws') {
+    if (node.wsPath) params.set('path', node.wsPath);
+    if (node.wsHost) params.set('host', node.wsHost);
+  } else if (node.network === 'grpc') {
+    if (node.grpcServiceName) params.set('serviceName', node.grpcServiceName);
+    if (node.grpcMode) params.set('mode', node.grpcMode);
+  }
+
+  const name = node.name ? `#${encodeName(node.name)}` : '';
+  const password = encodeURIComponent(node.password);
+  return `trojan://${password}@${node.server}:${node.port}?${params.toString()}${name}`;
+}
+
+/** Generate Hysteria2 URI */
+function genHysteria2(node) {
+  const params = new URLSearchParams();
+
+  if (node.sni) params.set('sni', node.sni);
+  if (node.alpn) params.set('alpn', Array.isArray(node.alpn) ? node.alpn.join(',') : node.alpn);
+  if (node.skipCertVerify) params.set('insecure', '1');
+  if (node.up) params.set('up', node.up);
+  if (node.down) params.set('down', node.down);
+  if (node.obfs) params.set('obfs', node.obfs);
+  if (node.obfsPassword) params.set('obfs-password', node.obfsPassword);
+
+  const name = node.name ? `#${encodeName(node.name)}` : '';
+  const auth = encodeURIComponent(node.auth || node.password || '');
+  return `hysteria2://${auth}@${node.server}:${node.port}?${params.toString()}${name}`;
+}
+
+/** Generate TUIC URI */
+function genTUIC(node) {
+  const params = new URLSearchParams();
+
+  if (node.sni) params.set('sni', node.sni);
+  if (node.alpn) params.set('alpn', Array.isArray(node.alpn) ? node.alpn.join(',') : node.alpn);
+  if (node.congestionControl) params.set('congestion_control', node.congestionControl);
+  if (node.udpRelayMode) params.set('udp_relay_mode', node.udpRelayMode);
+  if (node.skipCertVerify) params.set('allowInsecure', '1');
+
+  const name = node.name ? `#${encodeName(node.name)}` : '';
+  const uuid = encodeURIComponent(node.uuid);
+  const password = encodeURIComponent(node.password);
+  return `tuic://${uuid}:${password}@${node.server}:${node.port}?${params.toString()}${name}`;
+}

@@ -1,0 +1,17 @@
+{
+  "name": "subconvert",
+  "version": "1.0.0",
+  "description": "Self-hosted proxy subscription converter for Cloudflare Pages",
+  "private": true,
+  "scripts": {
+    "dev": "node dev.js",
+    "deploy": "node deploy.js",
+    "create-kv": "wrangler kv namespace create SUBCONVERT_KV"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.118.0"
+  }
+}
