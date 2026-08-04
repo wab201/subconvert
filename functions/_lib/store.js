@@ -23,6 +23,7 @@ export async function createLink(kv, link) {
     targetFormat: link.targetFormat,
     customPath: link.customPath,
     name: link.name || '',
+    userAgent: link.userAgent || '',
     createdAt: now,
     accessCount: 0,
   };

@@ -152,7 +152,7 @@ function clashProxyToNode(p) {
         uuid: p.uuid,
         flow: p.flow,
         network: p.network || 'tcp',
-        tls: p.tls === true ? 'tls' : (p['reality-opts'] ? 'reality' : 'none'),
+        tls: p['reality-opts'] ? 'reality' : (p.tls === true ? 'tls' : 'none'),
         sni: p.servername || p.sni,
         skipCertVerify: p['skip-cert-verify'] || false,
         realityPublicKey: p['reality-opts']?.['public-key'],

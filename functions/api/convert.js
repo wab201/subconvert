@@ -41,7 +41,7 @@ export async function onRequestPost(context) {
     return error('Invalid JSON body');
   }
 
-  const { sourceUrl, targetFormat, customPath, name } = body;
+  const { sourceUrl, targetFormat, customPath, name, userAgent } = body;
 
   // Validate required fields
   if (!sourceUrl || typeof sourceUrl !== 'string') {
@@ -77,6 +77,7 @@ export async function onRequestPost(context) {
     targetFormat,
     customPath: path,
     name: name || '',
+    userAgent: userAgent || '',
   });
 
   // Build the subscription URL

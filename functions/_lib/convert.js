@@ -8,7 +8,7 @@ import { generateSubscription } from './sub-generate.js';
 import { getLink, incrementAccess } from './store.js';
 
 /** Default User-Agent for fetching subscriptions (many providers require a specific UA) */
-const DEFAULT_UA = 'clash-verge/v2.0.0';
+const DEFAULT_UA = 'clash';
 
 /**
  * Fetch source subscription content.
@@ -81,7 +81,7 @@ export async function processSubscriptionRequest(kv, path) {
   // Fetch source subscription
   let sourceContent;
   try {
-    sourceContent = await fetchSubscription(link.sourceUrl);
+    sourceContent = await fetchSubscription(link.sourceUrl, link.userAgent);
   } catch (e) {
     return { error: 502, message: `Failed to fetch source: ${e.message}` };
   }

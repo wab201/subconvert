@@ -58,7 +58,12 @@ npm install
 npx wrangler kv namespace create SUBCONVERT_KV
 ```
 
-将输出的 `id` 填入 `wrangler.toml` 中的 `REPLACE_WITH_YOUR_KV_ID`。
+复制 `wrangler.toml.example` 为 `wrangler.toml`，将输出的 `id` 填入其中：
+
+```bash
+cp wrangler.toml.example wrangler.toml
+# 编辑 wrangler.toml，替换 REPLACE_WITH_YOUR_KV_ID
+```
 
 ### 3. 本地开发
 
@@ -115,8 +120,9 @@ npm run deploy
 2. 填写源订阅 URL
 3. 选择目标格式（Clash / Sing-Box / V2Ray / Plain Text）
 4. 可选：填写自定义路径和备注名称
-5. 点击「生成转换链接」
-6. 复制生成的订阅链接，导入到你的代理客户端
+5. 可选：选择 User-Agent（部分订阅源会校验 UA，默认 `clash`，遇到 403 时可尝试其他）
+6. 点击「生成转换链接」
+7. 复制生成的订阅链接，导入到你的代理客户端
 
 在「转换链接管理」区域可以：
 
@@ -152,7 +158,7 @@ subconvert/
 ├── package.json
 ├── deploy.js                   # 部署脚本（清除代理环境变量）
 ├── dev.js                      # 本地开发启动脚本（清除代理环境变量）
-├── wrangler.toml
+├── wrangler.toml.example       # 配置模板（复制为 wrangler.toml 并填入 KV ID）
 ├── LICENSE
 └── README.md
 ```
@@ -169,7 +175,8 @@ Content-Type: application/json
   "sourceUrl": "https://example.com/subscribe/...",
   "targetFormat": "clash",
   "customPath": "my-sub",       // 可选
-  "name": "我的订阅"             // 可选
+  "name": "我的订阅",             // 可选
+  "userAgent": "clash"          // 可选，默认 clash，部分订阅源需要特定 UA
 }
 ```
 
