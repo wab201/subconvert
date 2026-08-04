@@ -114,8 +114,11 @@ async function handleSubmit(e) {
     // Reset form
     $('#convertForm').reset();
 
-    // Refresh links
-    await loadLinks();
+    // Optimistic: immediately add the new link to the table
+    addLinkToTable(result);
+
+    // Then sync with server after a short delay (KV eventual consistency)
+    setTimeout(() => loadLinks(), 500);
   } catch (err) {
     toast(err.message, 'error');
   } finally {
@@ -151,41 +154,86 @@ function renderLinks(links) {
   tbody.innerHTML = '';
 
   for (const link of links) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>
-        <div class="cell-name">/sub/${escapeHtml(link.customPath)}</div>
-      </td>
-      <td class="cell-url" title="${escapeHtml(link.sourceUrl)}">${escapeHtml(link.sourceUrl)}</td>
-      <td><span class="cell-format">${FORMAT_LABELS[link.targetFormat] || link.targetFormat}</span></td>
-      <td>
-        <div class="cell-sub-url">
-          <code title="${escapeHtml(link.subscriptionUrl)}">${escapeHtml(link.subscriptionUrl)}</code>
-        </div>
-      </td>
-      <td>${link.accessCount || 0}</td>
-      <td>${formatDate(link.createdAt)}</td>
-      <td>
-        <div class="cell-actions">
-          <button class="btn-icon" data-action="copy" data-url="${escapeHtml(link.subscriptionUrl)}" title="复制订阅链接">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          </button>
-          <button class="btn-icon" data-action="open" data-url="${escapeHtml(link.subscriptionUrl)}" title="在新标签页打开">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          </button>
-          <button class="btn-icon btn-danger" data-action="delete" data-path="${escapeHtml(link.customPath)}" title="删除">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-          </button>
-        </div>
-      </td>
-    `;
-    tbody.appendChild(tr);
+    addLinkRow(link);
   }
+}
 
-  // Bind action buttons
-  tbody.querySelectorAll('[data-action]').forEach(btn => {
+function addLinkRow(link) {
+  const tbody = $('#linksBody');
+  const tr = document.createElement('tr');
+  tr.dataset.path = link.customPath;
+  tr.innerHTML = `
+    <td>
+      <div class="cell-name">/sub/${escapeHtml(link.customPath)}</div>
+    </td>
+    <td class="cell-url" title="${escapeHtml(link.sourceUrl)}">${escapeHtml(link.sourceUrl)}</td>
+    <td><span class="cell-format">${FORMAT_LABELS[link.targetFormat] || link.targetFormat}</span></td>
+    <td>
+      <div class="cell-sub-url">
+        <code title="${escapeHtml(link.subscriptionUrl)}">${escapeHtml(link.subscriptionUrl)}</code>
+      </div>
+    </td>
+    <td>${link.accessCount || 0}</td>
+    <td>${formatDate(link.createdAt)}</td>
+    <td>
+      <div class="cell-actions">
+        <button class="btn-icon" data-action="copy" data-url="${escapeHtml(link.subscriptionUrl)}" title="复制订阅链接">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+        <button class="btn-icon" data-action="open" data-url="${escapeHtml(link.subscriptionUrl)}" title="在新标签页打开">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+        <button class="btn-icon btn-danger" data-action="delete" data-path="${escapeHtml(link.customPath)}" title="删除">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    </td>
+  `;
+  tbody.appendChild(tr);
+
+  // Bind this row's action buttons
+  tr.querySelectorAll('[data-action]').forEach(btn => {
     btn.addEventListener('click', handleAction);
   });
+
+  return tr;
+}
+
+function addLinkToTable(link) {
+  const table = $('#linksTable');
+  const empty = $('#emptyState');
+  const countEl = $('#linkCount');
+
+  // Show table, hide empty state
+  table.hidden = false;
+  empty.hidden = true;
+
+  // If a row with the same path already exists, remove it first
+  const existing = $(`tr[data-path="${CSS.escape(link.customPath)}"]`);
+  if (existing) existing.remove();
+
+  // Insert at the top (newest first)
+  const tbody = $('#linksBody');
+  const tr = addLinkRow(link);
+  tbody.insertBefore(tr, tbody.firstChild);
+
+  // Update count
+  const count = tbody.children.length;
+  countEl.textContent = `共 ${count} 条链接`;
+}
+
+function removeLinkFromTable(path) {
+  const tbody = $('#linksBody');
+  const row = $(`tr[data-path="${CSS.escape(path)}"]`);
+  if (row) row.remove();
+
+  const count = tbody.children.length;
+  $('#linkCount').textContent = `共 ${count} 条链接`;
+
+  if (count === 0) {
+    $('#linksTable').hidden = true;
+    $('#emptyState').hidden = false;
+  }
 }
 
 async function handleAction(e) {
@@ -218,7 +266,10 @@ async function handleAction(e) {
     try {
       await apiDeleteLink(path);
       toast('链接已删除', 'success');
-      await loadLinks();
+      // Optimistic: immediately remove from UI
+      removeLinkFromTable(path);
+      // Then sync with server after a short delay
+      setTimeout(() => loadLinks(), 500);
     } catch (err) {
       toast('删除失败：' + err.message, 'error');
       btn.disabled = false;
