@@ -100,7 +100,6 @@ async function handleSubmit(e) {
   const sourceUrl = $('#sourceUrl').value.trim();
   const targetFormat = $('#targetFormat').value;
   const customPath = $('#customPath').value.trim();
-  const name = $('#name').value.trim();
 
   if (!sourceUrl) {
     toast('请输入源订阅 URL', 'error');
@@ -109,7 +108,7 @@ async function handleSubmit(e) {
 
   setLoading(true);
   try {
-    const result = await apiCreateLink({ sourceUrl, targetFormat, customPath, name });
+    const result = await apiCreateLink({ sourceUrl, targetFormat, customPath });
     toast(`转换链接已创建：${result.subscriptionUrl}`, 'success');
 
     // Reset form
@@ -155,8 +154,7 @@ function renderLinks(links) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>
-        <div class="cell-name">${escapeHtml(link.name || '未命名')}</div>
-        <div class="cell-path">/sub/${escapeHtml(link.customPath)}</div>
+        <div class="cell-name">/sub/${escapeHtml(link.customPath)}</div>
       </td>
       <td class="cell-url" title="${escapeHtml(link.sourceUrl)}">${escapeHtml(link.sourceUrl)}</td>
       <td><span class="cell-format">${FORMAT_LABELS[link.targetFormat] || link.targetFormat}</span></td>
@@ -175,7 +173,7 @@ function renderLinks(links) {
           <button class="btn-icon" data-action="open" data-url="${escapeHtml(link.subscriptionUrl)}" title="在新标签页打开">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </button>
-          <button class="btn-icon btn-danger" data-action="delete" data-path="${escapeHtml(link.customPath)}" data-name="${escapeHtml(link.name || link.customPath)}" title="删除">
+          <button class="btn-icon btn-danger" data-action="delete" data-path="${escapeHtml(link.customPath)}" title="删除">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
           </button>
         </div>
@@ -213,9 +211,8 @@ async function handleAction(e) {
     window.open(btn.dataset.url, '_blank');
   } else if (action === 'delete') {
     const path = btn.dataset.path;
-    const name = btn.dataset.name;
 
-    if (!confirm(`确定删除链接「${name}」吗？此操作不可恢复。`)) return;
+    if (!confirm(`确定删除链接「/sub/${path}」吗？此操作不可恢复。`)) return;
 
     btn.disabled = true;
     try {

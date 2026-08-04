@@ -119,7 +119,7 @@ npm run deploy
 1. 打开网站首页
 2. 填写源订阅 URL
 3. 选择目标格式（Clash / Sing-Box / V2Ray / Plain Text）
-4. 可选：填写自定义路径和备注名称
+4. 可选：填写自定义路径（同时作为备注标识，留空则自动生成）
 5. 点击「生成转换链接」
 6. 复制生成的订阅链接，导入到你的代理客户端
 
@@ -173,8 +173,7 @@ Content-Type: application/json
 {
   "sourceUrl": "https://example.com/subscribe/...",
   "targetFormat": "clash",
-  "customPath": "my-sub",       // 可选
-  "name": "我的订阅"             // 可选
+  "customPath": "my-sub"          // 可选，同时作为备注标识
 }
 ```
 
