@@ -120,9 +120,8 @@ npm run deploy
 2. 填写源订阅 URL
 3. 选择目标格式（Clash / Sing-Box / V2Ray / Plain Text）
 4. 可选：填写自定义路径和备注名称
-5. 可选：选择 User-Agent（部分订阅源会校验 UA，默认 `clash`，遇到 403 时可尝试其他）
-6. 点击「生成转换链接」
-7. 复制生成的订阅链接，导入到你的代理客户端
+5. 点击「生成转换链接」
+6. 复制生成的订阅链接，导入到你的代理客户端
 
 在「转换链接管理」区域可以：
 
@@ -175,8 +174,7 @@ Content-Type: application/json
   "sourceUrl": "https://example.com/subscribe/...",
   "targetFormat": "clash",
   "customPath": "my-sub",       // 可选
-  "name": "我的订阅",             // 可选
-  "userAgent": "clash"          // 可选，默认 clash，部分订阅源需要特定 UA
+  "name": "我的订阅"             // 可选
 }
 ```
 
@@ -230,7 +228,7 @@ wrangler 4 不支持 splat 路由参数（`...`），参数名只能包含字母
 
 可能原因及解决方案：
 
-1. **User-Agent 不被识别** — 在创建转换链接时选择或自定义合适的 UA。不同订阅源对 UA 的要求不同，可尝试 `clash-verge/v2.5.1`、`ClashforWindows/0.20.39` 等。
+1. **User-Agent 不被识别** — 默认使用 `clash-verge/v2.5.1`，大多数订阅源支持。如需修改默认 UA，可编辑 `functions/_lib/convert.js` 中的 `DEFAULT_UA` 常量。
 
 2. **订阅源启用了 Cloudflare 防护（Under Attack 模式）** — 如果错误信息中包含 `Just a moment...`，说明订阅源网站本身也托管在 Cloudflare 上并开启了 JS 挑战。由于本服务运行在 Cloudflare 边缘网络上，Cloudflare-to-Cloudflare 的请求会触发挑战页，Worker 无法执行 JavaScript 也就无法通过挑战。这是 Cloudflare 平台层面的限制，无法从代码层面解决。建议联系订阅源提供商获取不经过 Cloudflare 挑战的订阅域名。
 

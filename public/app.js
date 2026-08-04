@@ -101,15 +101,6 @@ async function handleSubmit(e) {
   const targetFormat = $('#targetFormat').value;
   const customPath = $('#customPath').value.trim();
   const name = $('#name').value.trim();
-  const uaSelect = $('#userAgent').value;
-  const customUA = $('#customUA').value.trim();
-
-  let userAgent = '';
-  if (uaSelect === 'custom') {
-    userAgent = customUA;
-  } else {
-    userAgent = uaSelect;
-  }
 
   if (!sourceUrl) {
     toast('请输入源订阅 URL', 'error');
@@ -118,7 +109,7 @@ async function handleSubmit(e) {
 
   setLoading(true);
   try {
-    const result = await apiCreateLink({ sourceUrl, targetFormat, customPath, name, userAgent });
+    const result = await apiCreateLink({ sourceUrl, targetFormat, customPath, name });
     toast(`转换链接已创建：${result.subscriptionUrl}`, 'success');
 
     // Reset form
@@ -262,13 +253,5 @@ function formatDate(timestamp) {
 document.addEventListener('DOMContentLoaded', () => {
   $('#convertForm').addEventListener('submit', handleSubmit);
   $('#btnRefresh').addEventListener('click', loadLinks);
-
-  // Show/hide custom UA input
-  $('#userAgent').addEventListener('change', (e) => {
-    const isCustom = e.target.value === 'custom';
-    $('#customUAGroup').hidden = !isCustom;
-    if (isCustom) $('#customUA').focus();
-  });
-
   loadLinks();
 });
