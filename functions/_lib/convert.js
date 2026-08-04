@@ -8,7 +8,7 @@ import { generateSubscription } from './sub-generate.js';
 import { getLink, incrementAccess } from './store.js';
 
 /** Default User-Agent for fetching subscriptions (many providers require a specific UA) */
-const DEFAULT_UA = 'clash';
+const DEFAULT_UA = 'clash-verge/v2.5.1';
 
 /**
  * Fetch source subscription content.
