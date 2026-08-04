@@ -24,11 +24,17 @@
 import { createLink, pathExists } from '../_lib/store.js';
 import { sanitizePath, generateId } from '../_lib/utils.js';
 import { json, error, handleCORS } from '../_lib/response.js';
+import { checkAuth } from '../_lib/auth.js';
 
 const VALID_FORMATS = ['clash', 'singbox', 'base64', 'plain'];
 
 export async function onRequestPost(context) {
   const { request, env } = context;
+
+  const auth = checkAuth(request, env);
+  if (!auth.ok) {
+    return error('Unauthorized: 访问密码错误或缺失', 401);
+  }
 
   if (!env.SUBCONVERT_KV) {
     return error('KV namespace not configured. Set up SUBCONVERT_KV binding in wrangler.toml.', 500);

@@ -1,11 +1,12 @@
 /**
  * SubConvert Frontend
- * Handles form submission, link management, and UI interactions.
+ * Handles form submission, link management, authentication, and UI interactions.
  */
 
 const API = {
   convert: '/api/convert',
   links: '/api/links',
+  auth: '/api/auth',
 };
 
 const FORMAT_LABELS = {
@@ -15,10 +16,156 @@ const FORMAT_LABELS = {
   plain: 'Plain',
 };
 
+const AUTH_KEY = 'subconvert_access_password';
+let currentPassword = localStorage.getItem(AUTH_KEY) || sessionStorage.getItem(AUTH_KEY) || '';
+
 // ─── DOM Helpers ──────────────────────────────────────────
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
+
+// ─── Auth State Management ────────────────────────────────
+
+function getAuthHeaders() {
+  const headers = {};
+  if (currentPassword) {
+    headers['X-Access-Password'] = currentPassword;
+  }
+  return headers;
+}
+
+async function fetchWithAuth(url, options = {}) {
+  const headers = {
+    ...getAuthHeaders(),
+    ...(options.headers || {}),
+  };
+  const resp = await fetch(url, { ...options, headers });
+  if (resp.status === 401) {
+    handleUnauthorized();
+    throw new Error('访问密码错误或已失效');
+  }
+  return resp;
+}
+
+function handleUnauthorized() {
+  currentPassword = '';
+  localStorage.removeItem(AUTH_KEY);
+  sessionStorage.removeItem(AUTH_KEY);
+  showAuthModal();
+  showAuthError('访问密码错误或已失效，请重新输入');
+}
+
+function showAuthModal() {
+  $('#authModal').hidden = false;
+  $('#accessPassword').focus();
+}
+
+function hideAuthModal() {
+  $('#authModal').hidden = true;
+  hideAuthError();
+  $('#accessPassword').value = '';
+}
+
+function showAuthError(msg) {
+  const errEl = $('#authError');
+  errEl.textContent = msg;
+  errEl.hidden = false;
+}
+
+function hideAuthError() {
+  const errEl = $('#authError');
+  errEl.hidden = true;
+  errEl.textContent = '';
+}
+
+function setAuthLoading(loading) {
+  const btn = $('#btnAuthSubmit');
+  btn.disabled = loading;
+  btn.querySelector('.btn-text').hidden = loading;
+  btn.querySelector('.btn-loading').hidden = !loading;
+}
+
+async function checkAuthStatus() {
+  try {
+    const resp = await fetch(API.auth, { headers: getAuthHeaders() });
+    const data = await resp.json();
+
+    if (!data.required) {
+      // Backend does not require authentication
+      hideAuthModal();
+      $('#btnLogout').hidden = true;
+      return true;
+    }
+
+    // Backend requires authentication
+    $('#btnLogout').hidden = false;
+
+    if (data.authenticated) {
+      hideAuthModal();
+      return true;
+    } else {
+      showAuthModal();
+      return false;
+    }
+  } catch (err) {
+    console.error('Failed to check auth status:', err);
+    return true;
+  }
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const pwdInput = $('#accessPassword');
+  const pwd = pwdInput.value.trim();
+  const remember = $('#rememberPassword').checked;
+
+  if (!pwd) return;
+
+  setAuthLoading(true);
+  hideAuthError();
+
+  try {
+    const resp = await fetch(API.auth, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Access-Password': pwd,
+      },
+      body: JSON.stringify({ password: pwd }),
+    });
+
+    const json = await resp.json();
+    if (!resp.ok || !json.authenticated) {
+      showAuthError(json.error || '访问密码错误');
+      return;
+    }
+
+    currentPassword = pwd;
+    if (remember) {
+      localStorage.setItem(AUTH_KEY, pwd);
+      sessionStorage.removeItem(AUTH_KEY);
+    } else {
+      sessionStorage.setItem(AUTH_KEY, pwd);
+      localStorage.removeItem(AUTH_KEY);
+    }
+
+    hideAuthModal();
+    toast('解锁成功', 'success');
+    loadLinks();
+  } catch (err) {
+    showAuthError('网络错误或验证失败，请重试');
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+function handleLogout() {
+  currentPassword = '';
+  localStorage.removeItem(AUTH_KEY);
+  sessionStorage.removeItem(AUTH_KEY);
+  toast('已锁定首页', 'info');
+  showAuthModal();
+}
 
 // ─── Toast Notifications ──────────────────────────────────
 
@@ -59,7 +206,7 @@ function escapeHtml(str) {
 // ─── API Calls ────────────────────────────────────────────
 
 async function apiCreateLink(data) {
-  const resp = await fetch(API.convert, {
+  const resp = await fetchWithAuth(API.convert, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -70,14 +217,14 @@ async function apiCreateLink(data) {
 }
 
 async function apiListLinks() {
-  const resp = await fetch(API.links);
+  const resp = await fetchWithAuth(API.links);
   const json = await resp.json();
   if (!resp.ok) throw new Error(json.error || 'Failed to load links');
   return json.links || [];
 }
 
 async function apiDeleteLink(path) {
-  const resp = await fetch(`${API.links}?path=${encodeURIComponent(path)}`, {
+  const resp = await fetchWithAuth(`${API.links}?path=${encodeURIComponent(path)}`, {
     method: 'DELETE',
   });
   const json = await resp.json();
@@ -131,6 +278,7 @@ async function loadLinks() {
     const links = await apiListLinks();
     renderLinks(links);
   } catch (err) {
+    if (err.message.includes('访问密码错误')) return;
     toast('加载链接列表失败：' + err.message, 'error');
   }
 }
@@ -285,7 +433,7 @@ function formatDate(timestamp) {
 
   if (diff < 60000) return '刚刚';
   if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
+  if (diff < 86400000) return `${Math.floor(diff / 86400000)} 小时前`;
   if (diff < 604800000) return `${Math.floor(diff / 86400000)} 天前`;
 
   const y = d.getFullYear();
@@ -298,8 +446,14 @@ function formatDate(timestamp) {
 
 // ─── Init ─────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   $('#convertForm').addEventListener('submit', handleSubmit);
   $('#btnRefresh').addEventListener('click', loadLinks);
-  loadLinks();
+  $('#authForm').addEventListener('submit', handleAuthSubmit);
+  $('#btnLogout').addEventListener('click', handleLogout);
+
+  const isAuthOk = await checkAuthStatus();
+  if (isAuthOk) {
+    loadLinks();
+  }
 });

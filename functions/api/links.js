@@ -11,9 +11,15 @@
 
 import { listLinks, deleteLink } from '../_lib/store.js';
 import { json, error, handleCORS } from '../_lib/response.js';
+import { checkAuth } from '../_lib/auth.js';
 
 export async function onRequestGet(context) {
-  const { env } = context;
+  const { request, env } = context;
+
+  const auth = checkAuth(request, env);
+  if (!auth.ok) {
+    return error('Unauthorized: 访问密码错误或缺失', 401);
+  }
 
   if (!env.SUBCONVERT_KV) {
     return error('KV namespace not configured', 500);
@@ -22,7 +28,6 @@ export async function onRequestGet(context) {
   const links = await listLinks(env.SUBCONVERT_KV);
 
   // Build full subscription URLs
-  const { request } = context;
   const origin = new URL(request.url).origin;
 
   const linksWithUrl = links.map(link => ({
@@ -35,6 +40,11 @@ export async function onRequestGet(context) {
 
 export async function onRequestDelete(context) {
   const { request, env } = context;
+
+  const auth = checkAuth(request, env);
+  if (!auth.ok) {
+    return error('Unauthorized: 访问密码错误或缺失', 401);
+  }
 
   if (!env.SUBCONVERT_KV) {
     return error('KV namespace not configured', 500);

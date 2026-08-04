@@ -109,6 +109,22 @@ npm run deploy
    - KV 命名空间：选择第 2 步创建的命名空间
 4. 重新部署项目
 
+## 访问密码保护（可选）
+
+为了防止他人随意访问你的首页并管理/删除转换链接，你可以配置首页访问密码：
+
+1. 在 Cloudflare Dashboard 中进入 **Workers & Pages** → 你的 `subconvert` 项目 → **Settings** → **Environment variables**。
+2. 添加环境变量：
+   - 变量名：`ACCESS_PASSWORD`
+   - 变量值：`你的自定义密码`
+3. 保存并重新部署项目。
+
+> **说明**：
+> - 未设置 `ACCESS_PASSWORD` 时，首页保持公开访问。
+> - **密码仅限制访问和管理网页首页**；网页生成的转换链接（如 `/sub/my-sub`）完全免密且公开可访问，以便各类代理客户端订阅更新。
+> - 本地开发调试时，可在根目录创建 `.dev.vars` 文件并写入 `ACCESS_PASSWORD=你的密码`。
+
+
 ## 使用方法
 
 1. 打开网站首页

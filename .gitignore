@@ -3,6 +3,7 @@ node_modules/
 .test-data/
 dist/
 .env
+.dev.vars
 *.log
 .DS_Store
 .wrangler-pids.txt
