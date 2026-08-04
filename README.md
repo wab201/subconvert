@@ -226,6 +226,14 @@ $env:HTTPS_PROXY=""; $env:HTTP_PROXY=""; $env:ALL_PROXY=""; node dev.js
 
 wrangler 4 不支持 splat 路由参数（`...`），参数名只能包含字母数字和下划线。本项目使用 `[path].js` 单段路由，完全满足自定义路径需求。
 
+### 部分订阅源返回 403 Forbidden
+
+可能原因及解决方案：
+
+1. **User-Agent 不被识别** — 在创建转换链接时选择或自定义合适的 UA。不同订阅源对 UA 的要求不同，可尝试 `clash-verge/v2.5.1`、`ClashforWindows/0.20.39` 等。
+
+2. **订阅源启用了 Cloudflare 防护（Under Attack 模式）** — 如果错误信息中包含 `Just a moment...`，说明订阅源网站本身也托管在 Cloudflare 上并开启了 JS 挑战。由于本服务运行在 Cloudflare 边缘网络上，Cloudflare-to-Cloudflare 的请求会触发挑战页，Worker 无法执行 JavaScript 也就无法通过挑战。这是 Cloudflare 平台层面的限制，无法从代码层面解决。建议联系订阅源提供商获取不经过 Cloudflare 挑战的订阅域名。
+
 ## License
 
 MIT
