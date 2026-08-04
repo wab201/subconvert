@@ -6,6 +6,5 @@ pages_build_output_dir = "public"
 # Run `npx wrangler kv namespace create SUBCONVERT_KV` first, then paste the id below
 [[kv_namespaces]]
 binding = "SUBCONVERT_KV"
-id = "8ca8be4f66ae4879a63bca15b39ba692"
-# REPLACE_WITH_YOUR_KV_ID
+id = "REPLACE_WITH_YOUR_KV_ID"
 # For local dev, wrangler auto-creates a local KV instance

@@ -79,7 +79,7 @@ npm run dev
 3. 选择你的 GitHub 仓库
 4. 构建设置：
    - **Framework preset**: `None`
-   - **Build command**: `npm install`
+   - **Build command**: 留空（无需构建，js-yaml 已内联）
    - **Build output directory**: `public`
 5. 点击 **Save and Deploy**
 6. 部署完成后，进入项目 **Settings** → **Functions** → **KV namespace bindings**，添加绑定：
@@ -139,7 +139,9 @@ subconvert/
 │   │   ├── sub-generate.js     # 订阅内容生成
 │   │   ├── store.js            # KV 存储操作
 │   │   ├── convert.js          # 转换管道
-│   │   └── response.js         # HTTP 响应辅助
+│   │   ├── response.js         # HTTP 响应辅助
+│   │   └── vendor/
+│   │       └── js-yaml.mjs     # js-yaml v4.3.1 内联（MIT，无需 npm install）
 │   ├── api/
 │   │   ├── convert.js          # POST /api/convert — 创建转换
 │   │   └── links.js            # GET/DELETE /api/links — 管理链接

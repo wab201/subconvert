@@ -8,7 +8,7 @@
  * - plain: Plain text list of proxy URIs
  */
 
-import yaml from 'js-yaml';
+import yaml from './vendor/js-yaml.mjs';
 import { generateURI } from './uri-generate.js';
 import { b64Encode } from './utils.js';
 
