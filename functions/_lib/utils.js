@@ -78,9 +78,8 @@ export function sanitizePath(path) {
   if (!path) return '';
   // Remove leading/trailing slashes, keep only safe characters
   let cleaned = path.replace(/^\/+|\/+$/g, '');
-  // Replace spaces with hyphens, keep Unicode letters/numbers too
-  // (so Chinese and other scripts work). Strip only control/dangerous chars.
-  cleaned = cleaned.replace(/\s+/g, '-').replace(/[^\p{L}\p{N}\-_/.]/gu, '');
+  // Replace spaces with hyphens, remove dangerous characters
+  cleaned = cleaned.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9\-_/.]/g, '');
   return cleaned;
 }
 

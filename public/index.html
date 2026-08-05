@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SubConvert - 代理订阅转换</title>
   <meta name="description" content="自托管的代理订阅转换工具，支持 Clash/Sing-box/V2Ray 等格式互转">
-  <link rel="stylesheet" href="/style.css?v=20260805c">
+  <link rel="stylesheet" href="/style.css?v=20260805d">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔄</text></svg>">
 </head>
 <body>
@@ -56,9 +56,9 @@
                 <label for="customPath">自定义路径</label>
                 <div class="path-input-wrapper">
                   <span class="path-prefix">/sub/</span>
-                  <input type="text" id="customPath" name="customPath" placeholder="留空则自动生成" autocomplete="off">
+                  <input type="text" id="customPath" name="customPath" placeholder="仅限英文/数字/连字符/下划线（留空自动生成）" autocomplete="off">
                 </div>
-                <p class="field-hint">支持中英文、数字、连字符、下划线（留空自动生成随机 ID）</p>
+                <p class="field-hint">仅支持英文、数字、连字符、下划线（留空自动生成）</p>
               </div>
           </div>
 
@@ -163,6 +163,6 @@
   <!-- Toast Container -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/app.js?v=20260805c"></script>
+  <script src="/app.js?v=20260805d"></script>
 </body>
 </html>
