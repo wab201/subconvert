@@ -219,25 +219,30 @@ $env:HTTPS_PROXY=""; $env:HTTP_PROXY=""; $env:ALL_PROXY=""; node dev.js
 
 ### Dashboard 提示「此项目的绑定在通过 wrangler.toml 进行管理」，无法手动绑定 KV
 
-这是项目类型不对导致的，不是配置写错。Cloudflare Pages 有两类项目，绑定来源完全不同：
+这条提示表示 Cloudflare 把该项目的**绑定来源锁定为 `wrangler.toml`**，导致 Dashboard 的 KV 绑定界面变成只读。两种常见成因：
 
-| 项目类型 | 如何创建 | KV 绑定在哪里配置 | Dashboard 绑定界面 |
-| --- | --- | --- | --- |
-| **Git 连接项目** | 通过 GitHub 导入（方式一） | Cloudflare Dashboard | ✅ 可手动编辑 |
-| **直接上传项目** | 通过 `wrangler pages deploy`（方式二） | `wrangler.toml` | 🔒 只读，提示由 wrangler.toml 管理 |
+| 成因 | 说明 | 对应解法 |
+| --- | --- | --- |
+| **A. 历史部署的 wrangler.toml 含 `[[kv_namespaces]]`** | 项目本身是 Git 连接类型（GitHub 导入），但线上跑的某个旧构建是从「wrangler.toml 还带 KV 块」的提交部署的，Cloudflare 在那次把绑定来源钉在了 wrangler.toml 上 | **解法 A（先试，零破坏）** |
+| **B. 项目是直接上传（direct-upload）类型** | 用 `wrangler pages deploy`（方式二）创建，绑定天生走 wrangler.toml；之后连接 Git 也不会改变项目类型 | **解法 B（彻底，会换地址）** |
 
-出现该提示，说明当前项目是**直接上传类型**（通常是因为最初用 `npm run deploy` / `wrangler pages deploy` 建的项目，之后又去连接了 GitHub——但连接 Git 不会改变已有的项目类型）。
+> 本项目现在的 `wrangler.toml` **已不含任何 KV 块**（见上方 KV 绑定说明），所以仓库本身是干净的，问题只在于线上绑定来源被钉死了。
 
-**解决步骤（推荐）**：删除当前项目，重新通过 GitHub 导入创建一个全新的 Git 连接项目。
+**解法 A（先试，无需删除项目）**：让 Cloudflare 重新读取干净的 wrangler.toml。
 
-1. Cloudflare Dashboard → **Workers & Pages** → 选中当前项目 → **Manage** / **Delete** 删除它（注意：`.pages.dev` 子域名删除后不一定能立即复用，新项目会得到一个新地址；如有自定义域名可重新绑定）。
-2. 回到 **Workers & Pages** → **Create** → **Pages** → **Connect to Git**，重新导入你的仓库（按方式一的设置）。
-3. 这次创建的是 Git 连接项目，进入 **Settings → Functions → KV namespace bindings**（或 **Settings → Bindings**）→ **Add binding**，变量名 `SUBCONVERT_KV`，选择你的命名空间。
-4. **Deployments** → 最新部署 **Redeploy** 使绑定生效。
+1. 确认 `main` 最新提交已部署：本仓库 `wrangler.toml` 已无 `[[kv_namespaces]]`；push 到 `main` 会自动触发构建，也可在 Dashboard → **Deployments** 手动 **Redeploy** 最新一次。
+2. 部署完成后，回到 **Settings → Functions → KV namespace bindings**（或 **Settings → Bindings**），看界面是否已可编辑。
+3. **若已可编辑**：直接 **Add binding**，变量名 `SUBCONVERT_KV`，选择你的命名空间，再 **Redeploy** 一次生效。✅ 完成，项目地址不变。
+4. **若仍提示「由 wrangler.toml 管理」**：说明该标记是粘性的、不会随新构建自动解除，走解法 B。
 
-> **为什么这样就能一劳永逸？** Git 连接项目的 KV 绑定保存在**项目级别**（不是某次部署、也不是 `wrangler.toml`）。所以之后你每次 `git push` 触发的重新部署，都会自动沿用同一个 Dashboard 绑定——**只要仓库里的 `wrangler.toml` 不含 `[[kv_namespaces]]` 块**（本项目已是如此），绑定就永远不会因为重部署而丢失。
+**解法 B（彻底，会换地址）**：删除当前项目，重新 GitHub 导入一个全新 Git 连接项目。
 
-如果你必须保留现有项目地址、不想删除重建，则只能走直接上传模式：把 KV 绑定写进**本地** `wrangler.toml`（用 `git update-index --skip-worktree wrangler.toml` 或加入 `.gitignore` 确保不提交），然后 `npm run deploy` 手动上传。但这种模式下 `git push` 不会自动更新 Functions，且容易误提交 KV ID。
+1. Dashboard → **Workers & Pages** → 选中项目 → **Delete**（注意：`.pages.dev` 子域名删除后不一定能立即复用，新项目会得到新地址；有自定义域名可重新绑回）。
+2. **Workers & Pages** → **Create** → **Pages** → **Connect to Git**，重新导入仓库（Framework=`None`、Build command 留空、输出目录 `public`）。
+3. 新项目是干净的 Git 连接类型，进入 **Settings → Functions → KV namespace bindings** → **Add binding**（变量名 `SUBCONVERT_KV`）。
+4. **Deployments** → 最新部署 **Redeploy** 生效。
+
+> **为什么这样能一劳永逸？** Git 连接项目的 KV 绑定保存在**项目级别**（不是某次部署、也不是 `wrangler.toml`）。之后每次 `git push` 触发的重新部署都会自动沿用同一个 Dashboard 绑定——**只要仓库 `wrangler.toml` 始终不含 `[[kv_namespaces]]` 块**（本项目已是如此），绑定永远不会因重部署而丢失。
 
 ### wrangler 4 不支持 `[...path].js` 路由
 
