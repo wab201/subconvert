@@ -67,7 +67,18 @@ export async function onRequestPost(context) {
   }
 
   // Sanitize and validate custom path
-  let path = customPath ? sanitizePath(customPath) : generateId(8);
+  const rawPath = customPath ? String(customPath).trim() : '';
+  let path = rawPath ? sanitizePath(rawPath) : generateId(8);
+
+  // Reject unsupported characters explicitly instead of silently
+  // generating a random path. Spaces are allowed (auto → hyphen).
+  if (rawPath && !/^[a-zA-Z0-9\-_/. ]+$/.test(rawPath)) {
+    return error(
+      '自定义路径仅支持英文、数字、连字符、下划线、点（空格会自动转为连字符）；包含不支持的字符，请修改或留空由系统自动生成',
+      400
+    );
+  }
+
   if (!path) {
     path = generateId(8);
   }
