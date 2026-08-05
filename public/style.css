@@ -205,6 +205,13 @@ input::placeholder {
   white-space: nowrap;
 }
 
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 .path-input-wrapper input {
   border: none;
   border-radius: 0;

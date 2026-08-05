@@ -32,7 +32,7 @@ export async function onRequestGet(context) {
 
   const linksWithUrl = links.map(link => ({
     ...link,
-    subscriptionUrl: `${origin}/sub/${link.customPath}`,
+    subscriptionUrl: `${origin}/sub/${encodeURIComponent(link.customPath)}`,
   }));
 
   return json({ links: linksWithUrl });

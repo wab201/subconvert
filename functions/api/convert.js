@@ -86,9 +86,9 @@ export async function onRequestPost(context) {
     userAgent: userAgent || '',
   });
 
-  // Build the subscription URL
+  // Build the subscription URL (encode path so Unicode/Chinese is valid)
   const url = new URL(request.url);
-  const subscriptionUrl = `${url.origin}/sub/${path}`;
+  const subscriptionUrl = `${url.origin}/sub/${encodeURIComponent(path)}`;
 
   return json({
     ...link,
