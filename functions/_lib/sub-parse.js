@@ -10,7 +10,7 @@
 
 import yaml from './vendor/js-yaml.mjs';
 import { parseURI } from './uri-parse.js';
-import { b64Decode, tryBase64Decode } from './utils.js';
+import { b64UrlDecode, tryBase64Decode } from './utils.js';
 
 /**
  * Auto-detect and parse subscription content.
@@ -20,38 +20,85 @@ import { b64Decode, tryBase64Decode } from './utils.js';
 export function parseSubscription(content) {
   if (!content || !content.trim()) return { nodes: [], format: 'unknown' };
 
-  const format = detectFormat(content);
+  // A subscription may itself be base64-wrapped (e.g. a v2ray base64 list, or a
+  // base64-encoded Clash/Sing-box config). Decode it once up front when the
+  // decoded payload looks like a subscription so downstream parsers see real YAML/JSON.
+  let working = content.trim();
+  const decoded = b64UrlDecode(working);
+  if (decoded && looksLikeSubscription(decoded)) working = decoded;
+
+  const format = detectFormat(working);
   let nodes = [];
 
   switch (format) {
     case 'base64':
-      nodes = parseBase64Sub(content);
+      nodes = parseBase64Sub(working);
       break;
     case 'clash':
-      nodes = parseClashSub(content);
+      nodes = parseClashSub(working);
       break;
     case 'singbox':
-      nodes = parseSingboxSub(content);
+      nodes = parseSingboxSub(working);
       break;
     case 'plain':
-      nodes = parsePlainSub(content);
+      nodes = parsePlainSub(working);
       break;
   }
+
+  nodes = nodes.map(normalizeNode);
+  dedupeNames(nodes);
 
   return { nodes, format };
 }
 
+/** Heuristic: does this text look like a subscription payload (vs random bytes)? */
+function looksLikeSubscription(s) {
+  const t = s.trim();
+  return /:\/\//.test(t) || /proxies:/.test(t) || t.startsWith('{') || t.startsWith('[');
+}
+
 /**
- * Detect the format of subscription content.
+ * Normalize a node produced by a structured-source parser (Clash/Sing-box):
+ * strip IPv6 brackets from the server and normalize alpn to an array.
+ * (URI parsers already run their own normalization/validation in uri-parse.js.)
  */
+function normalizeNode(n) {
+  if (!n || !n.type) return n;
+  if (typeof n.server === 'string') {
+    n.server = n.server.replace(/^\[|\]$/g, '').trim();
+  }
+  if (typeof n.alpn === 'string') {
+    n.alpn = n.alpn.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return n;
+}
+
+/**
+ * Ensure every node has a unique, non-empty name. Clash and Sing-box both
+ * reject duplicate names/tags and empty tags, which would make the entire
+ * generated config fail to load. Appends -2, -3, ... suffixes on collision.
+ */
+function dedupeNames(nodes) {
+  const seen = new Set();
+  for (const n of nodes) {
+    let name = (n.name && String(n.name).trim()) || '';
+    if (!name) name = `${n.type || 'node'}-${seen.size + 1}`;
+    let base = name;
+    let i = 2;
+    while (seen.has(name)) name = `${base}-${i++}`;
+    seen.add(name);
+    n.name = name;
+  }
+}
 export function detectFormat(content) {
   const trimmed = content.trim();
 
-  // Check if it's JSON (sing-box)
+  // Check if it's JSON (Clash JSON or Sing-box)
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
       const json = JSON.parse(trimmed);
-      if (json.outbounds || json.proxies) return 'singbox';
+      if (json.proxies && Array.isArray(json.proxies)) return 'clash';
+      if (json.outbounds) return 'singbox';
     } catch { /* not JSON */ }
   }
 
@@ -77,7 +124,7 @@ export function detectFormat(content) {
 
 /** Parse base64-encoded subscription (decodes to URI list) */
 export function parseBase64Sub(content) {
-  const decoded = b64Decode(content.trim());
+  const decoded = b64UrlDecode(content.trim());
   if (!decoded) return [];
   return parsePlainSub(decoded);
 }
@@ -116,6 +163,17 @@ function clashProxyToNode(p) {
     name: p.name || '',
     server: p.server,
     port: parseInt(p.port, 10),
+    // Preserve an explicit udp:false; pass-through nodes keep their original.
+    udp: p.udp,
+  };
+
+  // WebSocket / httpupgrade common fields (accept both Host and host casing)
+  const wsOpts = p['ws-opts'] || p['http-opts'];
+  const wsFields = {
+    wsPath: wsOpts?.path,
+    wsHost: wsOpts?.headers?.Host || wsOpts?.headers?.host,
+    wsEarlyData: wsOpts?.['max-early-data'],
+    wsEarlyDataHeader: wsOpts?.['early-data-header-name'],
   };
 
   switch (p.type) {
@@ -124,11 +182,14 @@ function clashProxyToNode(p) {
         ...base,
         cipher: p.cipher,
         password: p.password,
+        ...(p.plugin ? { plugin: p.plugin } : {}),
+        ...(p['plugin-opts'] ? { pluginOpts: p['plugin-opts'] } : {}),
       };
 
     case 'vmess':
       return {
         ...base,
+        ...wsFields,
         uuid: p.uuid,
         alterId: p.aid || p.alterId || 0,
         cipher: p.cipher || 'auto',
@@ -136,8 +197,6 @@ function clashProxyToNode(p) {
         tls: p.tls ? 'tls' : 'none',
         sni: p.servername || p.sni,
         skipCertVerify: p['skip-cert-verify'] || false,
-        wsPath: p['ws-opts']?.path,
-        wsHost: p['ws-opts']?.headers?.Host,
         grpcServiceName: p['grpc-opts']?.['grpc-service-name'],
         grpcMode: p['grpc-opts']?.['grpc-mode'],
         h2Host: p['h2-opts']?.host,
@@ -152,6 +211,7 @@ function clashProxyToNode(p) {
     case 'vless':
       return {
         ...base,
+        ...wsFields,
         uuid: p.uuid,
         flow: p.flow,
         network: p.network || 'tcp',
@@ -160,8 +220,6 @@ function clashProxyToNode(p) {
         skipCertVerify: p['skip-cert-verify'] || false,
         realityPublicKey: p['reality-opts']?.['public-key'],
         realityShortId: p['reality-opts']?.['short-id'],
-        wsPath: p['ws-opts']?.path,
-        wsHost: p['ws-opts']?.headers?.Host,
         grpcServiceName: p['grpc-opts']?.['grpc-service-name'],
         grpcMode: p['grpc-opts']?.['grpc-mode'],
         h2Host: p['h2-opts']?.host,
@@ -176,13 +234,12 @@ function clashProxyToNode(p) {
     case 'trojan':
       return {
         ...base,
+        ...wsFields,
         password: p.password,
         network: p.network || 'tcp',
         tls: 'tls',
         sni: p.sni || p.servername,
         skipCertVerify: p['skip-cert-verify'] || false,
-        wsPath: p['ws-opts']?.path,
-        wsHost: p['ws-opts']?.headers?.Host,
         grpcServiceName: p['grpc-opts']?.['grpc-service-name'],
         grpcMode: p['grpc-opts']?.['grpc-mode'],
         xhttpPath: p['xhttp-opts']?.path,
@@ -202,8 +259,8 @@ function clashProxyToNode(p) {
         tls: 'tls',
         sni: p.sni,
         skipCertVerify: p['skip-cert-verify'] || false,
-        up: p.up,
-        down: p.down,
+        up_mbps: p.up != null ? parseInt(String(p.up)) : undefined,
+        down_mbps: p.down != null ? parseInt(String(p.down)) : undefined,
         obfs: p.obfs,
         obfsPassword: p['obfs-password'],
         alpn: p.alpn,
@@ -223,7 +280,8 @@ function clashProxyToNode(p) {
       };
 
     default:
-      // Unknown type, store as-is with minimal fields
+      // Unknown/unsupported proxy type (snell, wireguard, socks5, ssr, ...):
+      // preserve the original object verbatim so it survives a Clash->Clash pass.
       return { ...base, _raw: p };
   }
 }
@@ -245,7 +303,7 @@ export function parseSingboxSub(content) {
 function singboxOutboundToNode(ob) {
   if (!ob || !ob.type) return null;
   // Skip non-proxy outbounds
-  const skipTypes = ['direct', 'block', 'dns', 'selector', 'urltest', 'compat'];
+  const skipTypes = ['direct', 'block', 'reject', 'dns', 'selector', 'urltest', 'compat'];
   if (skipTypes.includes(ob.type)) return null;
 
   const base = {
@@ -270,7 +328,7 @@ function singboxOutboundToNode(ob) {
         uuid: ob.uuid,
         alterId: ob.alter_id || 0,
         cipher: ob.security || 'auto',
-        network: ob.transport?.type || 'tcp',
+        network: ob.transport?.type === 'http' ? 'h2' : (ob.transport?.type || 'tcp'),
         tls: ob.tls?.enabled ? 'tls' : 'none',
         sni: ob.tls?.server_name,
         skipCertVerify: ob.tls?.insecure || false,
@@ -292,7 +350,7 @@ function singboxOutboundToNode(ob) {
         ...base,
         uuid: ob.uuid,
         flow: ob.flow,
-        network: ob.transport?.type || 'tcp',
+        network: ob.transport?.type === 'http' ? 'h2' : (ob.transport?.type || 'tcp'),
         tls: ob.tls?.enabled ? (ob.tls?.reality ? 'reality' : 'tls') : 'none',
         sni: ob.tls?.server_name,
         skipCertVerify: ob.tls?.insecure || false,
@@ -315,7 +373,7 @@ function singboxOutboundToNode(ob) {
       return {
         ...base,
         password: ob.password,
-        network: ob.transport?.type || 'tcp',
+        network: ob.transport?.type === 'http' ? 'h2' : (ob.transport?.type || 'tcp'),
         tls: 'tls',
         sni: ob.tls?.server_name,
         skipCertVerify: ob.tls?.insecure || false,
@@ -338,9 +396,10 @@ function singboxOutboundToNode(ob) {
         tls: 'tls',
         sni: ob.tls?.server_name,
         skipCertVerify: ob.tls?.insecure || false,
-        up: ob.up_mbps ? `${ob.up_mbps} Mbps` : undefined,
-        down: ob.down_mbps ? `${ob.down_mbps} Mbps` : undefined,
+        up_mbps: ob.up_mbps,
+        down_mbps: ob.down_mbps,
         alpn: ob.tls?.alpn,
+        ...(ob.obfs ? { obfs: ob.obfs.type, obfsPassword: ob.obfs.password } : {}),
       };
 
     case 'tuic':

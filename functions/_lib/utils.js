@@ -43,7 +43,9 @@ export function tryBase64Decode(str) {
   const trimmed = str.trim();
   // Check if it looks like base64 (no whitespace, valid chars, correct length)
   if (!/^[A-Za-z0-9+/\-_]+={0,2}$/.test(trimmed.replace(/\s/g, ''))) return null;
-  const decoded = b64Decode(trimmed);
+  // b64UrlDecode also handles standard base64 and missing padding, so it
+  // correctly decodes url-safe (-/_) and unpadded subscriptions too.
+  const decoded = b64UrlDecode(trimmed);
   if (decoded && /:\/\//.test(decoded)) return decoded;
   return null;
 }

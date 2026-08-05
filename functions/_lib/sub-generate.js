@@ -127,7 +127,8 @@ function nodeToClashProxy(n) {
     type: n.type,
     server: n.server,
     port: n.port,
-    udp: true,
+    // Preserve an explicit udp:false; default to true otherwise.
+    udp: n.udp === false ? false : true,
   };
 
   const addTLS = (obj) => {
@@ -150,10 +151,15 @@ function nodeToClashProxy(n) {
   const addTransport = (obj) => {
     if (n.network && n.network !== 'tcp') {
       obj.network = n.network;
-      if (n.network === 'ws') {
-        obj['ws-opts'] = {};
-        if (n.wsPath) obj['ws-opts'].path = n.wsPath;
-        if (n.wsHost) obj['ws-opts'].headers = { Host: n.wsHost };
+      if (n.network === 'ws' || n.network === 'httpupgrade') {
+        const key = n.network === 'ws' ? 'ws-opts' : 'http-opts';
+        obj[key] = {};
+        if (n.wsPath) obj[key].path = n.wsPath;
+        if (n.wsHost) obj[key].headers = { Host: n.wsHost };
+        if (n.network === 'ws' && n.wsEarlyData) {
+          obj[key]['max-early-data'] = n.wsEarlyData;
+          if (n.wsEarlyDataHeader) obj[key]['early-data-header-name'] = n.wsEarlyDataHeader;
+        }
       } else if (n.network === 'grpc') {
         obj['grpc-opts'] = {};
         if (n.grpcServiceName) obj['grpc-opts']['grpc-service-name'] = n.grpcServiceName;
@@ -177,6 +183,7 @@ function nodeToClashProxy(n) {
         ...base,
         cipher: n.cipher,
         password: n.password,
+        ...(n.plugin ? { plugin: n.plugin, 'plugin-opts': n.pluginOpts || {} } : {}),
       };
 
     case 'vmess':
@@ -214,8 +221,8 @@ function nodeToClashProxy(n) {
         password: n.auth || n.password,
         sni: n.sni,
         'skip-cert-verify': n.skipCertVerify || false,
-        up: n.up || '50 Mbps',
-        down: n.down || '200 Mbps',
+        ...(n.up_mbps ? { up: `${n.up_mbps} Mbps` } : {}),
+        ...(n.down_mbps ? { down: `${n.down_mbps} Mbps` } : {}),
         ...(n.obfs ? { obfs: n.obfs } : {}),
         ...(n.obfsPassword ? { 'obfs-password': n.obfsPassword } : {}),
       };
@@ -233,6 +240,9 @@ function nodeToClashProxy(n) {
       };
 
     default:
+      // Pass through proxy types the engine does not model (snell, wireguard,
+      // socks5, ssr, ...) so a Clash->Clash conversion doesn't silently drop them.
+      if (n._raw) return { ...n._raw, name: n.name };
       return null;
   }
 }
@@ -279,7 +289,7 @@ function genSingbox(nodes, options = {}) {
         interval: '5m',
       },
       { type: 'direct', tag: 'direct' },
-      { type: 'block', tag: 'block' },
+      { type: 'reject', tag: 'block' },
       { type: 'dns', tag: 'dns-out' },
     ],
     route: {
@@ -327,20 +337,24 @@ function nodeToSingboxOutbound(n) {
 
   const addTransport = (obj) => {
     if (n.network && n.network !== 'tcp') {
-      obj.transport = { type: n.network };
+      // Sing-box has no "xhttp" or "h2" transport type. The closest valid
+      // constructs are the "http" transport (used for both xhttp and the
+      // h2/http-upgrade family), so emit that without the unsupported types
+      // or the v2ray-only "mode" field.
+      const tType = (n.network === 'xhttp' || n.network === 'h2') ? 'http' : n.network;
+      obj.transport = { type: tType };
       if (n.network === 'ws') {
         if (n.wsPath) obj.transport.path = n.wsPath;
         if (n.wsHost) obj.transport.headers = { Host: n.wsHost };
       } else if (n.network === 'grpc') {
+        // Sing-box grpc transport does NOT accept a "mode" field — only service_name.
         if (n.grpcServiceName) obj.transport.service_name = n.grpcServiceName;
-        if (n.grpcMode) obj.transport.mode = n.grpcMode || 'gun';
       } else if (n.network === 'h2') {
         if (n.h2Host) obj.transport.host = n.h2Host;
         if (n.h2Path) obj.transport.path = n.h2Path;
       } else if (n.network === 'xhttp') {
         if (n.xhttpPath) obj.transport.path = n.xhttpPath;
-        if (n.xhttpHost) obj.transport.host = n.xhttpHost;
-        if (n.xhttpMode) obj.transport.mode = n.xhttpMode;
+        if (n.xhttpHost) obj.transport.host = [n.xhttpHost];
       }
     }
   };
@@ -392,6 +406,7 @@ function nodeToSingboxOutbound(n) {
       };
       if (n.up_mbps) hy2.up_mbps = n.up_mbps;
       if (n.down_mbps) hy2.down_mbps = n.down_mbps;
+      if (n.obfs) hy2.obfs = { type: n.obfs, password: n.obfsPassword || '' };
       return hy2;
 
     case 'tuic':

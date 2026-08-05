@@ -5,6 +5,11 @@
 
 import { b64Encode, b64UrlEncode, encodeName } from './utils.js';
 
+/** Wrap an IPv6 literal in brackets for use in a URI authority; leave hostnames alone. */
+function hostOf(server) {
+  return server && server.includes(':') ? `[${server}]` : server;
+}
+
 /** Generate a single proxy URI from a node object */
 export function generateURI(node) {
   if (!node || !node.type) return '';
@@ -84,9 +89,13 @@ function genVLESS(node) {
   if (node.alpn) params.set('alpn', Array.isArray(node.alpn) ? node.alpn.join(',') : node.alpn);
 
   // Transport
-  if (node.network === 'ws') {
+  if (node.network === 'ws' || node.network === 'httpupgrade') {
     if (node.wsPath) params.set('path', node.wsPath);
     if (node.wsHost) params.set('host', node.wsHost);
+    if (node.wsEarlyData) {
+      params.set('max-early-data', String(node.wsEarlyData));
+      if (node.wsEarlyDataHeader) params.set('early-data-header-name', node.wsEarlyDataHeader);
+    }
   } else if (node.network === 'grpc') {
     if (node.grpcServiceName) params.set('serviceName', node.grpcServiceName);
     if (node.grpcMode) params.set('mode', node.grpcMode);
@@ -101,7 +110,7 @@ function genVLESS(node) {
 
   const name = node.name ? `#${encodeName(node.name)}` : '';
   const uuid = encodeURIComponent(node.uuid);
-  return `vless://${uuid}@${node.server}:${node.port}?${params.toString()}${name}`;
+  return `vless://${uuid}@${hostOf(node.server)}:${node.port}?${params.toString()}${name}`;
 }
 
 /** Generate Trojan URI */
@@ -115,9 +124,13 @@ function genTrojan(node) {
   if (node.skipCertVerify) params.set('allowInsecure', '1');
 
   // Transport
-  if (node.network === 'ws') {
+  if (node.network === 'ws' || node.network === 'httpupgrade') {
     if (node.wsPath) params.set('path', node.wsPath);
     if (node.wsHost) params.set('host', node.wsHost);
+    if (node.wsEarlyData) {
+      params.set('max-early-data', String(node.wsEarlyData));
+      if (node.wsEarlyDataHeader) params.set('early-data-header-name', node.wsEarlyDataHeader);
+    }
   } else if (node.network === 'grpc') {
     if (node.grpcServiceName) params.set('serviceName', node.grpcServiceName);
     if (node.grpcMode) params.set('mode', node.grpcMode);
@@ -129,7 +142,7 @@ function genTrojan(node) {
 
   const name = node.name ? `#${encodeName(node.name)}` : '';
   const password = encodeURIComponent(node.password);
-  return `trojan://${password}@${node.server}:${node.port}?${params.toString()}${name}`;
+  return `trojan://${password}@${hostOf(node.server)}:${node.port}?${params.toString()}${name}`;
 }
 
 /** Generate Hysteria2 URI */
@@ -139,14 +152,14 @@ function genHysteria2(node) {
   if (node.sni) params.set('sni', node.sni);
   if (node.alpn) params.set('alpn', Array.isArray(node.alpn) ? node.alpn.join(',') : node.alpn);
   if (node.skipCertVerify) params.set('insecure', '1');
-  if (node.up) params.set('up', node.up);
-  if (node.down) params.set('down', node.down);
+  if (node.up_mbps) params.set('up', String(node.up_mbps));
+  if (node.down_mbps) params.set('down', String(node.down_mbps));
   if (node.obfs) params.set('obfs', node.obfs);
   if (node.obfsPassword) params.set('obfs-password', node.obfsPassword);
 
   const name = node.name ? `#${encodeName(node.name)}` : '';
   const auth = encodeURIComponent(node.auth || node.password || '');
-  return `hysteria2://${auth}@${node.server}:${node.port}?${params.toString()}${name}`;
+  return `hysteria2://${auth}@${hostOf(node.server)}:${node.port}?${params.toString()}${name}`;
 }
 
 /** Generate TUIC URI */
@@ -162,5 +175,5 @@ function genTUIC(node) {
   const name = node.name ? `#${encodeName(node.name)}` : '';
   const uuid = encodeURIComponent(node.uuid);
   const password = encodeURIComponent(node.password);
-  return `tuic://${uuid}:${password}@${node.server}:${node.port}?${params.toString()}${name}`;
+  return `tuic://${uuid}:${password}@${hostOf(node.server)}:${node.port}?${params.toString()}${name}`;
 }

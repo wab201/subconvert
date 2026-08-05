@@ -28,7 +28,12 @@
  * }
  */
 
-import { b64Decode, b64UrlDecode, parseQueryString, decodeName } from './utils.js';
+import { b64UrlDecode, decodeName } from './utils.js';
+
+/** Treat '1', 'true', and boolean true as enabled. */
+function isTrue(v) {
+  return v === '1' || v === 'true' || v === true;
+}
 
 /** Parse a single proxy URI, auto-detecting the protocol */
 export function parseURI(uri) {
@@ -50,6 +55,35 @@ export function parseURI(uri) {
   return null;
 }
 
+/**
+ * Finalize a parsed node: normalise the server field, normalize alpn,
+ * and reject structurally invalid nodes (missing server, out-of-range port,
+ * or missing credentials). Returning null makes the caller drop the node.
+ */
+function validateNode(n) {
+  if (!n || !n.type) return null;
+  if (typeof n.server === 'string') {
+    n.server = n.server.replace(/^\[|\]$/g, '').trim();
+  }
+  if (typeof n.alpn === 'string') {
+    n.alpn = n.alpn.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  if (!n.server) return null;
+  if (!Number.isInteger(n.port) || n.port < 1 || n.port > 65535) return null;
+  if (n.type === 'vmess' || n.type === 'vless') {
+    if (!n.uuid) return null;
+  } else if (n.type === 'trojan') {
+    if (!n.password) return null;
+  } else if (n.type === 'ss') {
+    if (!n.cipher || !n.password) return null;
+  } else if (n.type === 'hysteria2') {
+    if (!n.auth && !n.password) return null;
+  } else if (n.type === 'tuic') {
+    if (!n.uuid || !n.password) return null;
+  }
+  return n;
+}
+
 /** Parse Shadowsocks URI (supports both SIP002 and legacy formats) */
 function parseSS(uri) {
   // SIP002: ss://base64url(method:password)@host:port#name
@@ -61,19 +95,20 @@ function parseSS(uri) {
   const main = hashIdx >= 0 ? body.slice(0, hashIdx) : body;
 
   let method, password, server, port;
+  let ssPlugin = null;
 
   if (main.includes('@')) {
     // SIP002 format
     const atIdx = main.lastIndexOf('@');
     const userInfo = main.slice(0, atIdx);
     const hostPort = main.slice(atIdx + 1);
-    // Remove query string from hostPort
+    // Split off the query string (carries the plugin parameter)
     const qIdx = hostPort.indexOf('?');
     const hostPart = qIdx >= 0 ? hostPort.slice(0, qIdx) : hostPort;
+    const queryStr = qIdx >= 0 ? hostPort.slice(qIdx + 1) : '';
 
-    // Try base64url decode the user info
+    // Try base64url decode the user info (also handles standard base64 / no padding)
     let decoded = b64UrlDecode(userInfo);
-    if (!decoded) decoded = b64Decode(userInfo);
     if (!decoded) decoded = userInfo; // might be plaintext
 
     const colonIdx = decoded.indexOf(':');
@@ -84,9 +119,25 @@ function parseSS(uri) {
     const lastColon = hostPart.lastIndexOf(':');
     server = hostPart.slice(0, lastColon).replace(/^\[|\]$/g, '');
     port = parseInt(hostPart.slice(lastColon + 1), 10);
+
+    // Parse Shadowsocks plugin (e.g. obfs-local;obfs=http;obfs-host=bing.com)
+    if (queryStr) {
+      const pluginParam = new URLSearchParams(queryStr).get('plugin');
+      if (pluginParam) {
+        const segs = pluginParam.split(';');
+        const pluginName = segs.shift();
+        const pluginOpts = {};
+        for (const seg of segs) {
+          const eq = seg.indexOf('=');
+          if (eq >= 0) pluginOpts[seg.slice(0, eq)] = decodeURIComponent(seg.slice(eq + 1));
+          else if (seg) pluginOpts[seg] = true;
+        }
+        if (pluginName) ssPlugin = { name: pluginName, opts: pluginOpts };
+      }
+    }
   } else {
     // Legacy format: base64(method:password@host:port)
-    const decoded = b64Decode(main);
+    const decoded = b64UrlDecode(main);
     if (!decoded) return null;
     const atIdx = decoded.lastIndexOf('@');
     const methodPass = decoded.slice(0, atIdx);
@@ -101,7 +152,7 @@ function parseSS(uri) {
 
   if (!server || !port || !method) return null;
 
-  return {
+  const node = {
     type: 'ss',
     name: name || `${server}:${port}`,
     server,
@@ -109,13 +160,23 @@ function parseSS(uri) {
     cipher: method,
     password,
   };
+  if (ssPlugin) {
+    node.plugin = ssPlugin.name;
+    node.pluginOpts = ssPlugin.opts;
+  }
+  return validateNode(node);
 }
 
 /** Parse VMess URI (vmess://base64(json)) */
 function parseVMess(uri) {
-  const decoded = b64Decode(uri.slice(8));
+  const decoded = b64UrlDecode(uri.slice(8));
   if (!decoded) return null;
-  const config = JSON.parse(decoded);
+  let config;
+  try {
+    config = JSON.parse(decoded);
+  } catch {
+    return null;
+  }
 
   const node = {
     type: 'vmess',
@@ -132,7 +193,7 @@ function parseVMess(uri) {
   if (config.sni) node.sni = config.sni;
   if (config.host) node.wsHost = config.host;
   if (config.path) node.wsPath = config.path;
-  if (config.alpn) node.alpn = config.alpn;
+  if (config.alpn) node.alpn = config.alpn.split(',').map(s => s.trim()).filter(Boolean);
   if (config.fp) node.fingerprint = config.fp;
   if (config.verify_cert === false || config.allowInsecure) node.skipCertVerify = true;
 
@@ -156,7 +217,7 @@ function parseVMess(uri) {
     if (config.type) node.xhttpMode = config.type;
   }
 
-  return node;
+  return validateNode(node);
 }
 
 /** Parse VLESS URI */
@@ -183,7 +244,7 @@ function parseVLESS(uri) {
   if (params.get('sni')) node.sni = params.get('sni');
   if (params.get('alpn')) node.alpn = params.get('alpn').split(',');
   if (params.get('fp')) node.fingerprint = params.get('fp');
-  if (params.get('allowInsecure') === '1') node.skipCertVerify = true;
+  if (isTrue(params.get('allowInsecure')) || isTrue(params.get('insecure'))) node.skipCertVerify = true;
 
   // Reality options
   if (node.tls === 'reality') {
@@ -195,6 +256,8 @@ function parseVLESS(uri) {
   if (node.network === 'ws') {
     if (params.get('path')) node.wsPath = params.get('path');
     if (params.get('host')) node.wsHost = params.get('host');
+    if (params.get('max-early-data')) node.wsEarlyData = parseInt(params.get('max-early-data'), 10);
+    if (params.get('early-data-header-name')) node.wsEarlyDataHeader = params.get('early-data-header-name');
   } else if (node.network === 'grpc') {
     if (params.get('serviceName')) node.grpcServiceName = params.get('serviceName');
     if (params.get('mode')) node.grpcMode = params.get('mode');
@@ -202,6 +265,9 @@ function parseVLESS(uri) {
     node.network = 'h2';
     if (params.get('host')) node.h2Host = params.get('host').split(',');
     if (params.get('path')) node.h2Path = params.get('path');
+  } else if (node.network === 'httpupgrade') {
+    if (params.get('path')) node.wsPath = params.get('path');
+    if (params.get('host')) node.wsHost = params.get('host');
   } else if (node.network === 'xhttp') {
     if (params.get('path')) node.xhttpPath = params.get('path');
     if (params.get('host')) node.xhttpHost = params.get('host');
@@ -209,7 +275,7 @@ function parseVLESS(uri) {
   }
 
   if (!node.name) node.name = `${node.server}:${node.port}`;
-  return node;
+  return validateNode(node);
 }
 
 /** Parse Trojan URI */
@@ -230,15 +296,20 @@ function parseTrojan(uri) {
   if (params.get('sni')) node.sni = params.get('sni');
   if (params.get('alpn')) node.alpn = params.get('alpn').split(',');
   if (params.get('fp')) node.fingerprint = params.get('fp');
-  if (params.get('allowInsecure') === '1') node.skipCertVerify = true;
+  if (isTrue(params.get('allowInsecure')) || isTrue(params.get('insecure'))) node.skipCertVerify = true;
 
   // Transport options
   if (node.network === 'ws') {
     if (params.get('path')) node.wsPath = params.get('path');
     if (params.get('host')) node.wsHost = params.get('host');
+    if (params.get('max-early-data')) node.wsEarlyData = parseInt(params.get('max-early-data'), 10);
+    if (params.get('early-data-header-name')) node.wsEarlyDataHeader = params.get('early-data-header-name');
   } else if (node.network === 'grpc') {
     if (params.get('serviceName')) node.grpcServiceName = params.get('serviceName');
     if (params.get('mode')) node.grpcMode = params.get('mode');
+  } else if (node.network === 'httpupgrade') {
+    if (params.get('path')) node.wsPath = params.get('path');
+    if (params.get('host')) node.wsHost = params.get('host');
   } else if (node.network === 'xhttp') {
     if (params.get('path')) node.xhttpPath = params.get('path');
     if (params.get('host')) node.xhttpHost = params.get('host');
@@ -246,7 +317,7 @@ function parseTrojan(uri) {
   }
 
   if (!node.name) node.name = `${node.server}:${node.port}`;
-  return node;
+  return validateNode(node);
 }
 
 /** Parse Hysteria2 URI */
@@ -254,26 +325,32 @@ function parseHysteria2(uri) {
   const url = new URL(uri);
   const params = url.searchParams;
 
+  // Hysteria2 auth may be "user:pass" — the URL parser splits it into
+  // username/password, so reconstruct the full auth string before decoding.
+  let auth = url.username;
+  if (url.password) auth += ':' + url.password;
+  auth = decodeURIComponent(auth);
+
   const node = {
     type: 'hysteria2',
     name: decodeName(url.hash.slice(1)),
     server: url.hostname,
     port: parseInt(url.port, 10),
-    auth: decodeURIComponent(url.username) || '',
-    password: decodeURIComponent(url.username) || '', // alias
+    auth: auth || '',
+    password: auth || '', // alias
     tls: 'tls',
   };
 
   if (params.get('sni')) node.sni = params.get('sni');
   if (params.get('alpn')) node.alpn = params.get('alpn').split(',');
-  if (params.get('insecure') === '1') node.skipCertVerify = true;
-  if (params.get('up')) node.up = params.get('up');
-  if (params.get('down')) node.down = params.get('down');
+  if (isTrue(params.get('insecure')) || isTrue(params.get('allowInsecure'))) node.skipCertVerify = true;
+  if (params.get('up')) node.up_mbps = parseInt(params.get('up'), 10);
+  if (params.get('down')) node.down_mbps = parseInt(params.get('down'), 10);
   if (params.get('obfs')) node.obfs = params.get('obfs');
   if (params.get('obfs-password')) node.obfsPassword = params.get('obfs-password');
 
   if (!node.name) node.name = `${node.server}:${node.port}`;
-  return node;
+  return validateNode(node);
 }
 
 /** Parse TUIC URI */
@@ -298,5 +375,5 @@ function parseTUIC(uri) {
   if (params.get('allowInsecure') === '1') node.skipCertVerify = true;
 
   if (!node.name) node.name = `${node.server}:${node.port}`;
-  return node;
+  return validateNode(node);
 }
