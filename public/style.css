@@ -398,8 +398,7 @@ input::placeholder {
 }
 
 .cell-actions {
-  display: flex;
-  justify-content: center;
+  display: inline-flex;
   gap: 6px;
   white-space: nowrap;
 }
