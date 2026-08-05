@@ -8,3 +8,13 @@ dist/
 .DS_Store
 .wrangler-pids.txt
 .workbuddy/
+
+# IMPORTANT: never commit wrangler.toml for this project.
+# Its mere presence makes Cloudflare treat it as the source of truth for
+# the Pages project config, which LOCKS the Dashboard KV binding UI to
+# read-only ("bindings managed through wrangler.toml"). Keep any local
+# dev wrangler.toml out of version control. Local dev works without it
+# because dev.js passes `public` and `--kv SUBCONVERT_KV` on the CLI.
+wrangler.toml
+wrangler.json
+wrangler.jsonc

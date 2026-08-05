@@ -43,7 +43,7 @@
 
 本项目基于 Cloudflare Pages + KV，**零构建依赖**（js-yaml 已内联），两种部署方式任选其一。
 
-> **关于 KV 绑定（重要）**：无论用哪种方式部署，KV 命名空间都通过 **Cloudflare Dashboard** 绑定，变量名固定为 `SUBCONVERT_KV`。**`wrangler.toml` 中不包含、也不应该包含任何 KV ID**——它已纳入版本控制，直接 Fork 即可部署，无需改任何配置。
+> **关于 KV 绑定（重要）**：KV 命名空间通过 **Cloudflare Dashboard** 绑定，变量名固定为 `SUBCONVERT_KV`。**本仓库故意不包含 `wrangler.toml`**——因为只要仓库里存在 `wrangler.toml`，Cloudflare 就会把整个项目的「配置真源（source of truth）」判定为它，从而把 Dashboard 的 KV 绑定界面锁成只读（提示「此项目的绑定在通过 wrangler.toml 进行管理」）。所以**请勿把 `wrangler.toml` 提交进仓库**（已在 `.gitignore` 中忽略）。直接 Fork 即可部署，无需改任何配置。
 
 ### 前置要求
 
@@ -68,23 +68,17 @@
 
 部署完成后访问你的 `*.pages.dev` 地址即可使用。
 
-### 方式二：通过 Wrangler CLI 部署（不推荐用于本项目）
+### 方式二：通过 Wrangler CLI 部署（本项目不推荐，且无法满足 KV 绑定）
 
-> ⚠️ **重要警告**：`npm run deploy` 底层执行的是 `wrangler pages deploy`，这会把项目创建为 **直接上传（direct-upload）类型**。此类项目的绑定由 `wrangler.toml` 管理，**Dashboard 的 KV 绑定界面会被锁定为只读**，并提示「此项目的绑定在通过 wrangler.toml 进行管理」。即使之后再去连接 GitHub，项目类型也不会改变。
+> ⚠️ **不推荐**：本项目已**故意从仓库移除 `wrangler.toml`**——因为它的存在会让 Cloudflare 把 Dashboard 的 KV 绑定锁成只读（见上方 KV 绑定说明）。而 `wrangler pages deploy`（直接上传）的绑定恰恰依赖 `wrangler.toml`：没有它就无法绑定 KV，有它又会锁 Dashboard。两难之下，**本项目请始终用方式一（GitHub 导入）**，不要用 `npm run deploy`。
 >
-> 因此，如果你是为了开源 Fork / 一键部署，**请务必使用方式一（GitHub 导入）**，不要用方式二。方式二仅适合你明确需要「本地直接上传」且愿意在本地 `wrangler.toml` 里写 KV ID 的场景（注意这会导致 KV ID 泄露到仓库，详见上方 KV 绑定说明）。
-
-如果你已经用方式二建过项目、现在卡在「绑定由 wrangler.toml 管理」无法在 Dashboard 手动绑定，请见下方「常见问题」的对应条目。
-
-适合本地开发完直接推送（仅当你接受 direct-upload 模式时）：
+> 若坚持用直接上传：`npm run deploy` 会执行 `wrangler pages deploy public`，但仓库里已无 `wrangler.toml`，部署出的项目**没有 KV 绑定**，所有 API 会返回 500。要让它工作，你得在本地自建一个**不提交**的 `wrangler.toml` 写死 KV ID（有泄露风险），且每次都得手动上传、无法靠 `git push` 自动更新——得不偿失。
 
 ```bash
 npm install      # 仅本地需要
 npx wrangler login
-npm run deploy   # 首次会引导创建 Pages 项目（direct-upload 类型）
+npm run deploy   # 直接上传（无 KV 绑定，不推荐）
 ```
-
-部署成功后，KV 绑定需写在本地 `wrangler.toml` 的 `[[kv_namespaces]]` 中（**不要提交到 Git**），变量名固定为 `SUBCONVERT_KV`。
 
 ### 本地开发
 
@@ -92,7 +86,7 @@ npm run deploy   # 首次会引导创建 Pages 项目（direct-upload 类型）
 npm run dev
 ```
 
-访问 `http://localhost:8788`。`dev.js` 会自动清除代理环境变量，并以 `--kv SUBCONVERT_KV` 绑定一个本地 KV 实例——**无需修改 `wrangler.toml`，也无需创建线上 KV**。
+访问 `http://localhost:8788`。`dev.js` 会自动清除代理环境变量，并以命令行参数 `wrangler pages dev public --kv SUBCONVERT_KV` 绑定一个本地 KV 实例——**本仓库不含 `wrangler.toml`，本地开发完全不依赖它，也无需创建线上 KV**。
 
 ## 访问密码保护（可选）
 
@@ -153,9 +147,9 @@ subconvert/
 │   ├── style.css
 │   └── app.js
 ├── package.json
-├── deploy.js                   # 部署脚本（清除代理环境变量）
-├── dev.js                      # 本地开发启动脚本（清除代理环境变量）
-├── wrangler.toml               # Cloudflare Pages 配置（无账号相关 ID，KV 经 Dashboard 绑定）
+├── deploy.js                   # 部署脚本（清除代理环境变量；本项目不推荐使用）
+├── dev.js                      # 本地开发启动脚本（清除代理环境变量，CLI 传入 KV 绑定）
+├── .gitignore                  # 已忽略 wrangler.toml（其存在会锁死 Dashboard KV 绑定）
 ├── LICENSE
 └── README.md
 ```
@@ -219,30 +213,23 @@ $env:HTTPS_PROXY=""; $env:HTTP_PROXY=""; $env:ALL_PROXY=""; node dev.js
 
 ### Dashboard 提示「此项目的绑定在通过 wrangler.toml 进行管理」，无法手动绑定 KV
 
-这条提示表示 Cloudflare 把该项目的**绑定来源锁定为 `wrangler.toml`**，导致 Dashboard 的 KV 绑定界面变成只读。两种常见成因：
+这是 **`wrangler.toml` 文件存在于仓库中**导致的，与里面有没有 KV 块无关。Cloudflare 官方文档（Pages · Configuration）明确：Pages 项目里只要有 `wrangler.toml`，它就被视为项目配置的 **source of truth（真源）**，Dashboard 的对应字段变为只读（只能看、不能改）。即使你删除项目重新从 GitHub 导入，只要仓库里还有 `wrangler.toml`，新项目照样被锁。
 
-| 成因 | 说明 | 对应解法 |
-| --- | --- | --- |
-| **A. 历史部署的 wrangler.toml 含 `[[kv_namespaces]]`** | 项目本身是 Git 连接类型（GitHub 导入），但线上跑的某个旧构建是从「wrangler.toml 还带 KV 块」的提交部署的，Cloudflare 在那次把绑定来源钉在了 wrangler.toml 上 | **解法 A（先试，零破坏）** |
-| **B. 项目是直接上传（direct-upload）类型** | 用 `wrangler pages deploy`（方式二）创建，绑定天生走 wrangler.toml；之后连接 Git 也不会改变项目类型 | **解法 B（彻底，会换地址）** |
+**本仓库已实施正确做法**：把 `wrangler.toml` 从仓库彻底移除，并在 `.gitignore` 中忽略它。
 
-> 本项目现在的 `wrangler.toml` **已不含任何 KV 块**（见上方 KV 绑定说明），所以仓库本身是干净的，问题只在于线上绑定来源被钉死了。
+官方原文：
+> *"If you decide that you don't want to use wrangler.toml for configuration, you can safely delete it and create a new deployment. Configuration values from your last deployment will still apply and you will be able to edit them from the dashboard."*
 
-**解法 A（先试，无需删除项目）**：让 Cloudflare 重新读取干净的 wrangler.toml。
+**操作步骤**：
 
-1. 确认 `main` 最新提交已部署：本仓库 `wrangler.toml` 已无 `[[kv_namespaces]]`；push 到 `main` 会自动触发构建，也可在 Dashboard → **Deployments** 手动 **Redeploy** 最新一次。
-2. 部署完成后，回到 **Settings → Functions → KV namespace bindings**（或 **Settings → Bindings**），看界面是否已可编辑。
-3. **若已可编辑**：直接 **Add binding**，变量名 `SUBCONVERT_KV`，选择你的命名空间，再 **Redeploy** 一次生效。✅ 完成，项目地址不变。
-4. **若仍提示「由 wrangler.toml 管理」**：说明该标记是粘性的、不会随新构建自动解除，走解法 B。
+1. 确保仓库根目录**没有** `wrangler.toml`（本项目已 `git rm` 移除，并加入 `.gitignore` 防止误提交）。
+2. 推送改动触发重新部署（或手动 **Deployments → Redeploy**）。
+3. 部署完成后进入 **Settings → Functions → KV namespace bindings**（或 **Settings → Bindings**），此时界面应已可编辑。
+4. **Add binding**：变量名 `SUBCONVERT_KV`，选择你的命名空间，再 **Redeploy** 一次生效。✅
 
-**解法 B（彻底，会换地址）**：删除当前项目，重新 GitHub 导入一个全新 Git 连接项目。
+> 之后每次 `git push` 都会自动沿用这个 Dashboard 绑定（绑定存于项目级，跨部署持久），因为仓库里已无 `wrangler.toml`，Cloudflare 不会再把它锁成只读。
 
-1. Dashboard → **Workers & Pages** → 选中项目 → **Delete**（注意：`.pages.dev` 子域名删除后不一定能立即复用，新项目会得到新地址；有自定义域名可重新绑回）。
-2. **Workers & Pages** → **Create** → **Pages** → **Connect to Git**，重新导入仓库（Framework=`None`、Build command 留空、输出目录 `public`）。
-3. 新项目是干净的 Git 连接类型，进入 **Settings → Functions → KV namespace bindings** → **Add binding**（变量名 `SUBCONVERT_KV`）。
-4. **Deployments** → 最新部署 **Redeploy** 生效。
-
-> **为什么这样能一劳永逸？** Git 连接项目的 KV 绑定保存在**项目级别**（不是某次部署、也不是 `wrangler.toml`）。之后每次 `git push` 触发的重新部署都会自动沿用同一个 Dashboard 绑定——**只要仓库 `wrangler.toml` 始终不含 `[[kv_namespaces]]` 块**（本项目已是如此），绑定永远不会因重部署而丢失。
+**本地开发不需要 `wrangler.toml`**：`npm run dev`（`dev.js`）会以命令行参数 `wrangler pages dev public --kv SUBCONVERT_KV` 启动，目录与 KV 绑定都通过 CLI 传入，不依赖 `wrangler.toml`。若你本地想自建一个 `wrangler.toml` 用于其他调试，注意它已被 `.gitignore` 忽略、不会进仓库。
 
 ### wrangler 4 不支持 `[...path].js` 路由
 
