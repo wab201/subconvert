@@ -268,9 +268,13 @@ async function handleSubmit(e) {
 
     // Optimistic: immediately add the new link to the table
     addLinkToTable(result);
+    // Remember it so the periodic sync won't wipe it during KV's
+    // eventual-consistency window (the server list may lag the write).
+    optimisticCreated.set(result.customPath, Date.now());
 
-    // Then sync with server after a short delay (KV eventual consistency)
-    setTimeout(() => loadLinks(), 500);
+    // Then sync with server after a short delay (merge mode → keeps the
+    // optimistic row even if the server list hasn't caught up yet).
+    setTimeout(() => loadLinks(true), 500);
   } catch (err) {
     toast(err.message, 'error');
   } finally {
@@ -278,44 +282,85 @@ async function handleSubmit(e) {
   }
 }
 
-async function loadLinks() {
+async function loadLinks(merge = false) {
   try {
     const links = await apiListLinks();
-    renderLinks(links);
+    renderLinks(links, { merge });
   } catch (err) {
     if (err.message.includes('访问密码错误')) return;
     toast('加载链接列表失败：' + err.message, 'error');
   }
 }
 
-function renderLinks(links) {
+// ─── Optimistic-update consistency buffers ────────────────
+// KV reads (especially `list`) are eventually consistent: a freshly
+// created/deleted item may not appear (or may still appear) in the
+// server list for a few seconds. We keep a grace window so the periodic
+// merge-sync doesn't clobber rows we just created/deleted optimistically.
+const GRACE_MS = 60000;
+const optimisticCreated = new Map(); // path -> timestamp(ms)
+const optimisticDeleted = new Map(); // path -> timestamp(ms)
+
+function renderLinks(links, { merge = false } = {}) {
   const tbody = $('#linksBody');
   const table = $('#linksTable');
   const empty = $('#emptyState');
   const countEl = $('#linkCount');
 
-  countEl.textContent = `共 ${links.length} 条链接`;
+  const updateCount = () => {
+    const n = tbody.children.length;
+    countEl.textContent = `共 ${n} 条链接`;
+    table.hidden = n === 0;
+    empty.hidden = n > 0;
+  };
 
-  if (links.length === 0) {
-    table.hidden = true;
-    empty.hidden = false;
+  // Full render (initial load): wipe and rebuild.
+  if (!merge) {
+    tbody.innerHTML = '';
+    for (const link of links) addLinkRow(link);
+    updateCount();
     return;
   }
 
-  table.hidden = false;
-  empty.hidden = true;
-  tbody.innerHTML = '';
+  // Merge render: reconcile by customPath so optimistic rows survive KV lag.
+  const now = Date.now();
+  const serverPaths = new Set(links.map(l => l.customPath));
 
-  for (const link of links) {
-    addLinkRow(link);
+  // Map of existing rows keyed by path
+  const existing = new Map();
+  for (const tr of tbody.querySelectorAll('tr')) {
+    existing.set(tr.dataset.path, tr);
   }
+
+  // 1) Insert or update rows that exist on the server (skip just-deleted ones)
+  for (const link of links) {
+    if (optimisticDeleted.has(link.customPath)) continue;
+    const tr = existing.get(link.customPath);
+    if (tr) {
+      updateLinkRow(tr, link);
+    } else {
+      addLinkRow(link);
+    }
+    existing.delete(link.customPath);
+  }
+
+  // 2) Remove DOM rows absent from server, unless we just created them
+  //    (consistency lag) or just deleted them.
+  for (const [path, tr] of existing) {
+    if (optimisticCreated.has(path)) continue;
+    if (optimisticDeleted.has(path)) { tr.remove(); continue; }
+    tr.remove();
+  }
+
+  // 3) Expire stale grace entries
+  for (const [p, t] of optimisticCreated) if (now - t > GRACE_MS) optimisticCreated.delete(p);
+  for (const [p, t] of optimisticDeleted) if (now - t > GRACE_MS) optimisticDeleted.delete(p);
+
+  updateCount();
 }
 
-function addLinkRow(link) {
-  const tbody = $('#linksBody');
-  const tr = document.createElement('tr');
-  tr.dataset.path = link.customPath;
-  tr.innerHTML = `
+function buildRowInner(link) {
+  return `
     <td>
       <div class="cell-name"><a class="cell-path-link" href="${escapeHtml(link.subscriptionUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link.subscriptionUrl)}">${escapeHtml(link.customPath)}</a></div>
     </td>
@@ -332,6 +377,13 @@ function addLinkRow(link) {
       </div>
     </td>
   `;
+}
+
+function addLinkRow(link) {
+  const tbody = $('#linksBody');
+  const tr = document.createElement('tr');
+  tr.dataset.path = link.customPath;
+  tr.innerHTML = buildRowInner(link);
   tbody.appendChild(tr);
 
   // Bind this row's action buttons
@@ -340,6 +392,14 @@ function addLinkRow(link) {
   });
 
   return tr;
+}
+
+function updateLinkRow(tr, link) {
+  tr.dataset.path = link.customPath;
+  tr.innerHTML = buildRowInner(link);
+  tr.querySelectorAll('[data-action]').forEach(btn => {
+    btn.addEventListener('click', handleAction);
+  });
 }
 
 function addLinkToTable(link) {
@@ -409,8 +469,11 @@ async function handleAction(e) {
       toast('链接已删除', 'success');
       // Optimistic: immediately remove from UI
       removeLinkFromTable(path);
-      // Then sync with server after a short delay
-      setTimeout(() => loadLinks(), 500);
+      // Remember it so the sync won't re-add it if the server list
+      // still shows it (deletion lag).
+      optimisticDeleted.set(path, Date.now());
+      // Then sync with server after a short delay (merge mode)
+      setTimeout(() => loadLinks(true), 500);
     } catch (err) {
       toast('删除失败：' + err.message, 'error');
       btn.disabled = false;
