@@ -312,7 +312,7 @@ function addLinkRow(link) {
   tr.dataset.path = link.customPath;
   tr.innerHTML = `
     <td>
-      <div class="cell-name"><a class="cell-path-link" href="${escapeHtml(link.subscriptionUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link.subscriptionUrl)}">/sub/${escapeHtml(link.customPath)}</a></div>
+      <div class="cell-name"><a class="cell-path-link" href="${escapeHtml(link.subscriptionUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link.subscriptionUrl)}">${escapeHtml(link.customPath)}</a></div>
     </td>
     <td class="cell-url" title="${escapeHtml(link.sourceUrl)}">${escapeHtml(link.sourceUrl)}</td>
     <td><span class="cell-format">${FORMAT_LABELS[link.targetFormat] || link.targetFormat}</span></td>
