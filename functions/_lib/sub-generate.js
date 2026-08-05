@@ -162,6 +162,11 @@ function nodeToClashProxy(n) {
         obj['h2-opts'] = {};
         if (n.h2Host) obj['h2-opts'].host = n.h2Host;
         if (n.h2Path) obj['h2-opts'].path = n.h2Path;
+      } else if (n.network === 'xhttp') {
+        obj['xhttp-opts'] = {};
+        if (n.xhttpPath) obj['xhttp-opts'].path = n.xhttpPath;
+        if (n.xhttpHost) obj['xhttp-opts'].host = n.xhttpHost;
+        if (n.xhttpMode) obj['xhttp-opts'].mode = n.xhttpMode;
       }
     }
   };
@@ -332,6 +337,10 @@ function nodeToSingboxOutbound(n) {
       } else if (n.network === 'h2') {
         if (n.h2Host) obj.transport.host = n.h2Host;
         if (n.h2Path) obj.transport.path = n.h2Path;
+      } else if (n.network === 'xhttp') {
+        if (n.xhttpPath) obj.transport.path = n.xhttpPath;
+        if (n.xhttpHost) obj.transport.host = n.xhttpHost;
+        if (n.xhttpMode) obj.transport.mode = n.xhttpMode;
       }
     }
   };

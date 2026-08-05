@@ -43,9 +43,9 @@ function genVMess(node) {
     aid: String(node.alterId || 0),
     scy: node.cipher || 'auto',
     net: node.network || 'tcp',
-    type: node.grpcMode || 'none',
-    host: node.wsHost || '',
-    path: node.wsPath || node.grpcServiceName || node.h2Path || '',
+    type: node.network === 'xhttp' ? (node.xhttpMode || 'auto') : (node.grpcMode || 'none'),
+    host: node.network === 'xhttp' ? (node.xhttpHost || '') : (node.wsHost || ''),
+    path: node.network === 'xhttp' ? (node.xhttpPath || '') : (node.wsPath || node.grpcServiceName || node.h2Path || ''),
     tls: node.tls === 'tls' || node.tls === 'reality' ? node.tls : '',
     sni: node.sni || '',
     alpn: node.alpn || '',
@@ -93,6 +93,10 @@ function genVLESS(node) {
   } else if (node.network === 'h2') {
     if (node.h2Host) params.set('host', node.h2Host.join(','));
     if (node.h2Path) params.set('path', node.h2Path);
+  } else if (node.network === 'xhttp') {
+    if (node.xhttpPath) params.set('path', node.xhttpPath);
+    if (node.xhttpHost) params.set('host', node.xhttpHost);
+    if (node.xhttpMode) params.set('mode', node.xhttpMode);
   }
 
   const name = node.name ? `#${encodeName(node.name)}` : '';
@@ -117,6 +121,10 @@ function genTrojan(node) {
   } else if (node.network === 'grpc') {
     if (node.grpcServiceName) params.set('serviceName', node.grpcServiceName);
     if (node.grpcMode) params.set('mode', node.grpcMode);
+  } else if (node.network === 'xhttp') {
+    if (node.xhttpPath) params.set('path', node.xhttpPath);
+    if (node.xhttpHost) params.set('host', node.xhttpHost);
+    if (node.xhttpMode) params.set('mode', node.xhttpMode);
   }
 
   const name = node.name ? `#${encodeName(node.name)}` : '';

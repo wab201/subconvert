@@ -142,6 +142,9 @@ function clashProxyToNode(p) {
         grpcMode: p['grpc-opts']?.['grpc-mode'],
         h2Host: p['h2-opts']?.host,
         h2Path: p['h2-opts']?.path,
+        xhttpPath: p['xhttp-opts']?.path,
+        xhttpHost: p['xhttp-opts']?.host,
+        xhttpMode: p['xhttp-opts']?.mode,
         alpn: p.alpn,
         fingerprint: p['client-fingerprint'],
       };
@@ -163,6 +166,9 @@ function clashProxyToNode(p) {
         grpcMode: p['grpc-opts']?.['grpc-mode'],
         h2Host: p['h2-opts']?.host,
         h2Path: p['h2-opts']?.path,
+        xhttpPath: p['xhttp-opts']?.path,
+        xhttpHost: p['xhttp-opts']?.host,
+        xhttpMode: p['xhttp-opts']?.mode,
         alpn: p.alpn,
         fingerprint: p['client-fingerprint'],
       };
@@ -179,6 +185,9 @@ function clashProxyToNode(p) {
         wsHost: p['ws-opts']?.headers?.Host,
         grpcServiceName: p['grpc-opts']?.['grpc-service-name'],
         grpcMode: p['grpc-opts']?.['grpc-mode'],
+        xhttpPath: p['xhttp-opts']?.path,
+        xhttpHost: p['xhttp-opts']?.host,
+        xhttpMode: p['xhttp-opts']?.mode,
         alpn: p.alpn,
         fingerprint: p['client-fingerprint'],
       };
@@ -272,6 +281,9 @@ function singboxOutboundToNode(ob) {
         grpcMode: ob.transport?.mode,
         h2Host: ob.transport?.host,
         h2Path: ob.transport?.path,
+        xhttpPath: ob.transport?.type === 'xhttp' ? ob.transport?.path : undefined,
+        xhttpHost: ob.transport?.type === 'xhttp' ? ob.transport?.host : undefined,
+        xhttpMode: ob.transport?.type === 'xhttp' ? ob.transport?.mode : undefined,
         fingerprint: ob.tls?.utls?.fingerprint,
       };
 
@@ -292,6 +304,9 @@ function singboxOutboundToNode(ob) {
         grpcMode: ob.transport?.mode,
         h2Host: ob.transport?.host,
         h2Path: ob.transport?.path,
+        xhttpPath: ob.transport?.type === 'xhttp' ? ob.transport?.path : undefined,
+        xhttpHost: ob.transport?.type === 'xhttp' ? ob.transport?.host : undefined,
+        xhttpMode: ob.transport?.type === 'xhttp' ? ob.transport?.mode : undefined,
         alpn: ob.tls?.alpn,
         fingerprint: ob.tls?.utls?.fingerprint,
       };
@@ -308,6 +323,9 @@ function singboxOutboundToNode(ob) {
         wsHost: ob.transport?.headers?.Host,
         grpcServiceName: ob.transport?.service_name,
         grpcMode: ob.transport?.mode,
+        xhttpPath: ob.transport?.type === 'xhttp' ? ob.transport?.path : undefined,
+        xhttpHost: ob.transport?.type === 'xhttp' ? ob.transport?.host : undefined,
+        xhttpMode: ob.transport?.type === 'xhttp' ? ob.transport?.mode : undefined,
         alpn: ob.tls?.alpn,
         fingerprint: ob.tls?.utls?.fingerprint,
       };

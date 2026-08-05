@@ -11,10 +11,11 @@
  *   // VMess/VLESS
  *   uuid?, alterId?, flow?,
  *   // Transport
- *   network?, // tcp | ws | grpc | h2 | httpupgrade
+ *   network?, // tcp | ws | grpc | h2 | httpupgrade | xhttp
  *   wsPath?, wsHost?,
  *   grpcServiceName?, grpcMode?,
  *   h2Host?, h2Path?,
+ *   xhttpPath?, xhttpHost?, xhttpMode?,
  *   // TLS
  *   tls?, // tls | reality | none
  *   sni?, alpn?, fingerprint?, skipCertVerify?,
@@ -147,6 +148,14 @@ function parseVMess(uri) {
     if (config.path) node.h2Path = config.path;
   }
 
+  // xhttp
+  if (config.net === 'xhttp') {
+    if (config.path) node.xhttpPath = config.path;
+    if (config.host) node.xhttpHost = config.host;
+    // v2rayN stores the xhttp mode in the `type` field (same slot used by grpc mode)
+    if (config.type) node.xhttpMode = config.type;
+  }
+
   return node;
 }
 
@@ -193,6 +202,10 @@ function parseVLESS(uri) {
     node.network = 'h2';
     if (params.get('host')) node.h2Host = params.get('host').split(',');
     if (params.get('path')) node.h2Path = params.get('path');
+  } else if (node.network === 'xhttp') {
+    if (params.get('path')) node.xhttpPath = params.get('path');
+    if (params.get('host')) node.xhttpHost = params.get('host');
+    if (params.get('mode')) node.xhttpMode = params.get('mode');
   }
 
   if (!node.name) node.name = `${node.server}:${node.port}`;
@@ -226,6 +239,10 @@ function parseTrojan(uri) {
   } else if (node.network === 'grpc') {
     if (params.get('serviceName')) node.grpcServiceName = params.get('serviceName');
     if (params.get('mode')) node.grpcMode = params.get('mode');
+  } else if (node.network === 'xhttp') {
+    if (params.get('path')) node.xhttpPath = params.get('path');
+    if (params.get('host')) node.xhttpHost = params.get('host');
+    if (params.get('mode')) node.xhttpMode = params.get('mode');
   }
 
   if (!node.name) node.name = `${node.server}:${node.port}`;
