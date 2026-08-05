@@ -399,8 +399,13 @@ input::placeholder {
 
 .cell-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 6px;
   white-space: nowrap;
+}
+
+.links-table th:last-child {
+  text-align: right;
 }
 
 /* Empty State */

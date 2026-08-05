@@ -441,7 +441,6 @@ function formatDate(timestamp) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   $('#convertForm').addEventListener('submit', handleSubmit);
-  $('#btnRefresh').addEventListener('click', loadLinks);
   $('#authForm').addEventListener('submit', handleAuthSubmit);
   $('#btnLogout').addEventListener('click', handleLogout);
 
