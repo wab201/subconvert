@@ -376,6 +376,8 @@ input::placeholder {
   font-weight: 600;
   background: var(--primary-light);
   color: var(--primary);
+  text-align: center;
+  max-width: 96px;
 }
 
 .cell-path-link {
@@ -419,6 +421,12 @@ input::placeholder {
   text-align: center;
   width: 132px;
   max-width: 132px;
+}
+
+.links-table th:nth-child(3),
+.links-table td:nth-child(3) {
+  text-align: center;
+  width: 104px;
 }
 
 /* Empty State */
