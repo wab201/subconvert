@@ -405,7 +405,7 @@ input::placeholder {
 }
 
 .links-table th:last-child {
-  text-align: right;
+  text-align: center;
 }
 
 /* Empty State */
