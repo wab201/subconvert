@@ -1,0 +1,8 @@
+/style.css
+  Cache-Control: no-cache
+
+/app.js
+  Cache-Control: no-cache
+
+/
+  Cache-Control: no-cache
