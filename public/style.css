@@ -378,6 +378,17 @@ input::placeholder {
   color: var(--primary);
 }
 
+.cell-path-link {
+  color: var(--primary);
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.cell-path-link:hover {
+  text-decoration: underline;
+}
+
 .cell-sub-url {
   display: flex;
   align-items: center;

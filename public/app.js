@@ -312,7 +312,7 @@ function addLinkRow(link) {
   tr.dataset.path = link.customPath;
   tr.innerHTML = `
     <td>
-      <div class="cell-name">/sub/${escapeHtml(link.customPath)}</div>
+      <div class="cell-name"><a class="cell-path-link" href="${escapeHtml(link.subscriptionUrl)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(link.subscriptionUrl)}">/sub/${escapeHtml(link.customPath)}</a></div>
     </td>
     <td class="cell-url" title="${escapeHtml(link.sourceUrl)}">${escapeHtml(link.sourceUrl)}</td>
     <td><span class="cell-format">${FORMAT_LABELS[link.targetFormat] || link.targetFormat}</span></td>
@@ -320,9 +320,6 @@ function addLinkRow(link) {
       <div class="cell-actions">
         <button class="btn-icon" data-action="copy" data-url="${escapeHtml(link.subscriptionUrl)}" title="复制订阅链接">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-        </button>
-        <button class="btn-icon" data-action="open" data-url="${escapeHtml(link.subscriptionUrl)}" title="在新标签页打开">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </button>
         <button class="btn-icon btn-danger" data-action="delete" data-path="${escapeHtml(link.customPath)}" title="删除">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -396,8 +393,6 @@ async function handleAction(e) {
       input.remove();
       toast('订阅链接已复制', 'success');
     }
-  } else if (action === 'open') {
-    window.open(btn.dataset.url, '_blank');
   } else if (action === 'delete') {
     const path = btn.dataset.path;
 
