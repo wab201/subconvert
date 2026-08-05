@@ -9,6 +9,10 @@ dist/
 .wrangler-pids.txt
 .workbuddy/
 
+# Temp scratch dir for one-off subscription consistency checks (curl dumps + compare script).
+# Contains fetched subscription payloads — never commit.
+_check/
+
 # IMPORTANT: never commit wrangler.toml for this project.
 # Its mere presence makes Cloudflare treat it as the source of truth for
 # the Pages project config, which LOCKS the Dashboard KV binding UI to
