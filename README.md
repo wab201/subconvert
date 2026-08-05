@@ -39,75 +39,54 @@
 - Hysteria2 (`hysteria2://` / `hy2://`)
 - TUIC (`tuic://`)
 
-## 快速开始
+## 部署
+
+本项目基于 Cloudflare Pages + KV，**零构建依赖**（js-yaml 已内联），两种部署方式任选其一。
+
+> **关于 KV 绑定（重要）**：无论用哪种方式部署，KV 命名空间都通过 **Cloudflare Dashboard** 绑定，变量名固定为 `SUBCONVERT_KV`。**`wrangler.toml` 中不包含、也不应该包含任何 KV ID**——它已纳入版本控制，直接 Fork 即可部署，无需改任何配置。
 
 ### 前置要求
 
-- [Node.js](https://nodejs.org/) 18+
-- Cloudflare 账号
+- 一个 Cloudflare 账号
+- （仅本地开发需要）[Node.js](https://nodejs.org/) 18+
 
-### 1. 安装依赖
+### 方式一：通过 GitHub 导入部署（推荐）
+
+1. 将本仓库 **Fork** 到你的 GitHub 账号。
+2. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**。
+3. 选择你 Fork 的仓库，构建设置如下：
+   - **Framework preset**：`None`
+   - **Build command**：留空（无需构建，依赖已内联）
+   - **Build output directory**：`public`
+4. 点击 **Save and Deploy**，等待首次部署完成。
+5. 创建 KV 命名空间：Dashboard 左侧 **KV** → **Create a namespace**，名字随意（如 `subconvert-kv`），记下它的 **ID**。
+6. 绑定 KV：进入你的 Pages 项目 → **Settings** → **Functions** → **KV namespace bindings** → **Add binding**：
+   - Variable name：`SUBCONVERT_KV`
+   - KV namespace：选择上一步创建的命名空间
+7. 回到项目 **Deployments** 标签，点击最新一次部署的 **Redeploy** 使绑定生效。
+8. （可选）设置访问密码，见下方「访问密码保护」一节。
+
+部署完成后访问你的 `*.pages.dev` 地址即可使用。
+
+### 方式二：通过 Wrangler CLI 部署
+
+适合本地开发完直接推送。
 
 ```bash
-npm install
+npm install      # 仅本地需要
+npx wrangler login
+npm run deploy   # 首次会引导创建 Pages 项目
 ```
 
-### 2. 创建 KV 命名空间
+部署成功后，按方式一步骤 5–7 在 Dashboard 中创建并绑定 KV 命名空间 `SUBCONVERT_KV`。
 
-```bash
-npx wrangler kv namespace create SUBCONVERT_KV
-```
-
-将输出的 `id` 填入 `wrangler.toml` 中，替换 `REPLACE_WITH_YOUR_KV_ID`。
-
-### 3. 本地开发
+### 本地开发
 
 ```bash
 npm run dev
 ```
 
-访问 `http://localhost:8788` 即可使用。本地开发会自动创建本地 KV 实例。
-
-### 4. 部署到 Cloudflare Pages
-
-有两种部署方式：
-
-#### 方式一：Git 导入部署（推荐）
-
-1. 将本项目 Fork 或推送到你的 GitHub 仓库
-2. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com) → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
-3. 选择你的 GitHub 仓库
-4. 构建设置：
-   - **Framework preset**: `None`
-   - **Build command**: 留空（无需构建，js-yaml 已内联）
-   - **Build output directory**: `public`
-5. 点击 **Save and Deploy**
-6. 部署完成后，进入项目 **Settings** → **Functions** → **KV namespace bindings**，添加绑定：
-   - Variable name: `SUBCONVERT_KV`
-   - KV namespace: 选择第 2 步创建的命名空间
-7. 重新部署一次使 KV 绑定生效
-
-#### 方式二：Wrangler CLI 部署
-
-```bash
-npm run deploy
-```
-
-首次部署时，wrangler 会引导你登录 Cloudflare 账号并创建 Pages 项目。
-
-### 5. 绑定 KV（生产环境）
-
-> 如果使用方式一（Git 导入），KV 绑定在 Dashboard 中完成（见上方步骤 6-7）。
-> 如果使用方式二（CLI 部署），也可在 Dashboard 中手动绑定：
-
-在 Cloudflare Dashboard 中：
-
-1. 进入 **Workers & Pages** → 选择你的 `subconvert` 项目
-2. 进入 **Settings** → **Bindings**
-3. 添加 **KV namespace** 绑定
-   - 变量名：`SUBCONVERT_KV`
-   - KV 命名空间：选择第 2 步创建的命名空间
-4. 重新部署项目
+访问 `http://localhost:8788`。`dev.js` 会自动清除代理环境变量，并以 `--kv SUBCONVERT_KV` 绑定一个本地 KV 实例——**无需修改 `wrangler.toml`，也无需创建线上 KV**。
 
 ## 访问密码保护（可选）
 
@@ -170,7 +149,7 @@ subconvert/
 ├── package.json
 ├── deploy.js                   # 部署脚本（清除代理环境变量）
 ├── dev.js                      # 本地开发启动脚本（清除代理环境变量）
-├── wrangler.toml               # Cloudflare Pages 配置（需填入你的 KV ID）
+├── wrangler.toml               # Cloudflare Pages 配置（无账号相关 ID，KV 经 Dashboard 绑定）
 ├── LICENSE
 └── README.md
 ```
