@@ -426,7 +426,7 @@ input::placeholder {
 .links-table th:nth-child(3),
 .links-table td:nth-child(3) {
   text-align: center;
-  width: 104px;
+  width: 76px;
 }
 
 /* Empty State */

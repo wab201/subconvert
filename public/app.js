@@ -10,8 +10,8 @@ const API = {
 };
 
 const FORMAT_LABELS = {
-  clash: 'Clash',
-  singbox: 'Sing-Box',
+  clash: 'YAML',
+  singbox: 'JSON',
   base64: 'Base64',
   plain: 'Plain',
 };
