@@ -68,17 +68,23 @@
 
 部署完成后访问你的 `*.pages.dev` 地址即可使用。
 
-### 方式二：通过 Wrangler CLI 部署
+### 方式二：通过 Wrangler CLI 部署（不推荐用于本项目）
 
-适合本地开发完直接推送。
+> ⚠️ **重要警告**：`npm run deploy` 底层执行的是 `wrangler pages deploy`，这会把项目创建为 **直接上传（direct-upload）类型**。此类项目的绑定由 `wrangler.toml` 管理，**Dashboard 的 KV 绑定界面会被锁定为只读**，并提示「此项目的绑定在通过 wrangler.toml 进行管理」。即使之后再去连接 GitHub，项目类型也不会改变。
+>
+> 因此，如果你是为了开源 Fork / 一键部署，**请务必使用方式一（GitHub 导入）**，不要用方式二。方式二仅适合你明确需要「本地直接上传」且愿意在本地 `wrangler.toml` 里写 KV ID 的场景（注意这会导致 KV ID 泄露到仓库，详见上方 KV 绑定说明）。
+
+如果你已经用方式二建过项目、现在卡在「绑定由 wrangler.toml 管理」无法在 Dashboard 手动绑定，请见下方「常见问题」的对应条目。
+
+适合本地开发完直接推送（仅当你接受 direct-upload 模式时）：
 
 ```bash
 npm install      # 仅本地需要
 npx wrangler login
-npm run deploy   # 首次会引导创建 Pages 项目
+npm run deploy   # 首次会引导创建 Pages 项目（direct-upload 类型）
 ```
 
-部署成功后，按方式一步骤 5–7 在 Dashboard 中创建并绑定 KV 命名空间 `SUBCONVERT_KV`。
+部署成功后，KV 绑定需写在本地 `wrangler.toml` 的 `[[kv_namespaces]]` 中（**不要提交到 Git**），变量名固定为 `SUBCONVERT_KV`。
 
 ### 本地开发
 
@@ -210,6 +216,28 @@ GET /sub/:path
 # PowerShell
 $env:HTTPS_PROXY=""; $env:HTTP_PROXY=""; $env:ALL_PROXY=""; node dev.js
 ```
+
+### Dashboard 提示「此项目的绑定在通过 wrangler.toml 进行管理」，无法手动绑定 KV
+
+这是项目类型不对导致的，不是配置写错。Cloudflare Pages 有两类项目，绑定来源完全不同：
+
+| 项目类型 | 如何创建 | KV 绑定在哪里配置 | Dashboard 绑定界面 |
+| --- | --- | --- | --- |
+| **Git 连接项目** | 通过 GitHub 导入（方式一） | Cloudflare Dashboard | ✅ 可手动编辑 |
+| **直接上传项目** | 通过 `wrangler pages deploy`（方式二） | `wrangler.toml` | 🔒 只读，提示由 wrangler.toml 管理 |
+
+出现该提示，说明当前项目是**直接上传类型**（通常是因为最初用 `npm run deploy` / `wrangler pages deploy` 建的项目，之后又去连接了 GitHub——但连接 Git 不会改变已有的项目类型）。
+
+**解决步骤（推荐）**：删除当前项目，重新通过 GitHub 导入创建一个全新的 Git 连接项目。
+
+1. Cloudflare Dashboard → **Workers & Pages** → 选中当前项目 → **Manage** / **Delete** 删除它（注意：`.pages.dev` 子域名删除后不一定能立即复用，新项目会得到一个新地址；如有自定义域名可重新绑定）。
+2. 回到 **Workers & Pages** → **Create** → **Pages** → **Connect to Git**，重新导入你的仓库（按方式一的设置）。
+3. 这次创建的是 Git 连接项目，进入 **Settings → Functions → KV namespace bindings**（或 **Settings → Bindings**）→ **Add binding**，变量名 `SUBCONVERT_KV`，选择你的命名空间。
+4. **Deployments** → 最新部署 **Redeploy** 使绑定生效。
+
+> **为什么这样就能一劳永逸？** Git 连接项目的 KV 绑定保存在**项目级别**（不是某次部署、也不是 `wrangler.toml`）。所以之后你每次 `git push` 触发的重新部署，都会自动沿用同一个 Dashboard 绑定——**只要仓库里的 `wrangler.toml` 不含 `[[kv_namespaces]]` 块**（本项目已是如此），绑定就永远不会因为重部署而丢失。
+
+如果你必须保留现有项目地址、不想删除重建，则只能走直接上传模式：把 KV 绑定写进**本地** `wrangler.toml`（用 `git update-index --skip-worktree wrangler.toml` 或加入 `.gitignore` 确保不提交），然后 `npm run deploy` 手动上传。但这种模式下 `git push` 不会自动更新 Functions，且容易误提交 KV ID。
 
 ### wrangler 4 不支持 `[...path].js` 路由
 
