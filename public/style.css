@@ -399,13 +399,16 @@ input::placeholder {
 
 .cell-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 6px;
   white-space: nowrap;
 }
 
-.links-table th:last-child {
+.links-table th:last-child,
+.links-table td:last-child {
   text-align: center;
+  width: 132px;
+  max-width: 132px;
 }
 
 /* Empty State */
