@@ -56,14 +56,15 @@ export async function fetchSubscription(url, userAgent) {
  */
 export function convertSubscription(content, targetFormat, options = {}) {
   // Auto-detect and parse source format
-  const { nodes, format: sourceFormat } = parseSubscription(content);
+  const { nodes, format: sourceFormat, meta } = parseSubscription(content);
 
   if (nodes.length === 0) {
     throw new Error(`No proxy nodes found in subscription (detected format: ${sourceFormat})`);
   }
 
-  // Generate target format
-  const { content: output, contentType } = generateSubscription(nodes, targetFormat, options);
+  // Generate target format, threading the source config (rules / proxy groups /
+  // dns / clash-api) so we preserve them instead of overwriting with defaults.
+  const { content: output, contentType } = generateSubscription(nodes, targetFormat, { ...options, meta });
 
   return {
     content: output,

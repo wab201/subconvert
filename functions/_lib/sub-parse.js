@@ -18,7 +18,7 @@ import { b64UrlDecode, tryBase64Decode } from './utils.js';
  * @returns {{nodes: Array, format: string}}
  */
 export function parseSubscription(content) {
-  if (!content || !content.trim()) return { nodes: [], format: 'unknown' };
+  if (!content || !content.trim()) return { nodes: [], format: 'unknown', meta: {} };
 
   // A subscription may itself be base64-wrapped (e.g. a v2ray base64 list, or a
   // base64-encoded Clash/Sing-box config). Decode it once up front when the
@@ -29,27 +29,112 @@ export function parseSubscription(content) {
 
   const format = detectFormat(working);
   let nodes = [];
+  let meta = {};
 
   switch (format) {
     case 'base64':
       nodes = parseBase64Sub(working);
       break;
-    case 'clash':
-      nodes = parseClashSub(working);
+    case 'clash': {
+      const r = parseClashSub(working);
+      nodes = r.nodes; meta = r.meta;
       break;
-    case 'singbox':
-      nodes = parseSingboxSub(working);
+    }
+    case 'singbox': {
+      const r = parseSingboxSub(working);
+      nodes = r.nodes; meta = r.meta;
       break;
+    }
     case 'plain':
       nodes = parsePlainSub(working);
       break;
   }
 
+  // Capture original names BEFORE dedupe so we can rewrite the proxy-group and
+  // rule references carried in `meta` to the final (de-duplicated) names.
+  const originals = nodes.map(n => (n.name != null ? String(n.name).trim() : ''));
   nodes = nodes.map(normalizeNode);
   dedupeNames(nodes);
 
-  return { nodes, format };
+  rebaseMeta(meta, buildRenameMap(nodes, originals));
+
+  return { nodes, format, meta };
 }
+
+/**
+ * Deep-clone plain config objects. Subscription configs are pure JSON data
+ * (no functions/classes), so a round-trip through JSON is safe and avoids
+ * mutating the parsed source document when we rewrite references.
+ */
+function clone(x) {
+  try { return JSON.parse(JSON.stringify(x)); } catch { return x; }
+}
+
+/**
+ * Build a mapping from each node's original name to the final name(s) it was
+ * de-duplicated into. When several nodes shared a name, they map to the
+ * sequence of unique suffixes (HK -> [HK, HK-2, HK-3, ...]).
+ */
+function buildRenameMap(nodes, originals) {
+  const map = new Map();
+  for (let i = 0; i < nodes.length; i++) {
+    const orig = originals[i];
+    if (!orig) continue;
+    if (!map.has(orig)) map.set(orig, []);
+    map.get(orig).push(nodes[i].name);
+  }
+  return map;
+}
+
+/**
+ * Rewrite proxy-group membership lists and rule targets in `meta` so they
+ * point at the de-duplicated node names. Group membership lists consume the
+ * rename mapping in order (shift); rule targets peek at the primary instance
+ * (so a rule pointing at a renamed proxy still resolves, without starving a
+ * group that also referenced it).
+ */
+function rebaseMeta(meta, map) {
+  if (!meta || typeof meta !== 'object') return;
+
+  const rebaseList = (list) => (list || []).map(name => {
+    const arr = map.get(name);
+    return (arr && arr.length) ? arr.shift() : name;
+  });
+  const peek = (name) => {
+    const arr = map.get(name);
+    return (arr && arr.length) ? arr[0] : name;
+  };
+
+  if (Array.isArray(meta.proxyGroups)) {
+    for (const g of meta.proxyGroups) {
+      if (g && Array.isArray(g.proxies)) g.proxies = rebaseList(g.proxies);
+    }
+  }
+  if (Array.isArray(meta.groups)) {
+    for (const g of meta.groups) {
+      if (g && Array.isArray(g.outbounds)) g.outbounds = rebaseList(g.outbounds);
+    }
+  }
+  if (Array.isArray(meta.rules)) {
+    meta.rules = meta.rules.map(r => rebaseRule(r, map, peek));
+  }
+  if (meta.route && Array.isArray(meta.route.rules)) {
+    for (const r of meta.route.rules) {
+      if (r && r.outbound) r.outbound = peek(r.outbound);
+    }
+  }
+}
+
+/** Rewrite the final (outbound/group) target of a Clash rule string. */
+function rebaseRule(rule, map, peek) {
+  if (typeof rule !== 'string') return rule;
+  const parts = rule.split(',');
+  const lastIdx = parts.length - 1;
+  const target = parts[lastIdx].trim();
+  if (map.has(target)) parts[lastIdx] = peek(target);
+  return parts.join(',');
+}
+
 
 /** Heuristic: does this text look like a subscription payload (vs random bytes)? */
 function looksLikeSubscription(s) {
@@ -145,14 +230,28 @@ export function parsePlainSub(content) {
 /** Parse Clash/Mihomo YAML subscription */
 export function parseClashSub(content) {
   const doc = yaml.load(content);
-  if (!doc || !doc.proxies || !Array.isArray(doc.proxies)) return [];
+  if (!doc || !doc.proxies || !Array.isArray(doc.proxies)) return { nodes: [], meta: {} };
 
   const nodes = [];
   for (const proxy of doc.proxies) {
     const node = clashProxyToNode(proxy);
     if (node) nodes.push(node);
   }
-  return nodes;
+
+  // Preserve the rest of the config (proxy groups, routing rules, rule
+  // providers, dns, clash-api) so a Clash->Clash conversion doesn't silently
+  // drop them. These are rebased (node-name references rewritten) later in
+  // parseSubscription once duplicate names are resolved.
+  const meta = {
+    format: 'clash',
+    proxyGroups: Array.isArray(doc['proxy-groups']) ? clone(doc['proxy-groups']) : null,
+    rules: Array.isArray(doc.rules) ? doc.rules.slice() : null,
+    ruleProviders: (doc['rule-providers'] && typeof doc['rule-providers'] === 'object') ? clone(doc['rule-providers']) : null,
+    dns: (doc.dns && typeof doc.dns === 'object') ? clone(doc.dns) : null,
+    clashApi: (doc['clash-api'] && typeof doc['clash-api'] === 'object') ? clone(doc['clash-api']) : null,
+  };
+
+  return { nodes, meta };
 }
 
 /** Convert a Clash proxy entry to unified node format */
@@ -288,15 +387,41 @@ function clashProxyToNode(p) {
 
 /** Parse Sing-box JSON subscription */
 export function parseSingboxSub(content) {
-  const doc = JSON.parse(content);
-  if (!doc.outbounds || !Array.isArray(doc.outbounds)) return [];
+  let doc;
+  try {
+    doc = JSON.parse(content);
+  } catch {
+    return { nodes: [], meta: {} };
+  }
+  if (!doc.outbounds || !Array.isArray(doc.outbounds)) return { nodes: [], meta: {} };
+
+  // Proxy types are modelled as unified nodes; everything else (selector,
+  // url-test, load-balance, relay, direct, reject, dns, ...) is structural
+  // config we preserve verbatim so a Sing-box->Sing-box conversion keeps the
+  // user's proxy groups and routing rules.
+  const PROXY_TYPES = new Set(['shadowsocks', 'vmess', 'vless', 'trojan', 'hysteria2', 'tuic']);
 
   const nodes = [];
   for (const ob of doc.outbounds) {
     const node = singboxOutboundToNode(ob);
     if (node) nodes.push(node);
   }
-  return nodes;
+  const groups = doc.outbounds.filter(o => o && o.type && !PROXY_TYPES.has(o.type));
+
+  const meta = {
+    format: 'singbox',
+    groups: groups.length ? clone(groups) : null,
+    route: doc.route ? {
+      rules: Array.isArray(doc.route.rules) ? doc.route.rules.slice() : null,
+      rule_set: doc.route.rule_set || null,
+      final: doc.route.final || null,
+      auto_detect_interface: doc.route.auto_detect_interface,
+    } : null,
+    dns: (doc.dns && typeof doc.dns === 'object') ? clone(doc.dns) : null,
+    clashApi: doc.experimental?.clash_api ? clone(doc.experimental.clash_api) : null,
+  };
+
+  return { nodes, meta };
 }
 
 /** Convert a Sing-box outbound to unified node format */

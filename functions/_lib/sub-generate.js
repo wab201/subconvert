@@ -63,41 +63,112 @@ function genPlain(nodes) {
   return nodes.map(n => generateURI(n)).filter(Boolean).join('\n');
 }
 
-/** Generate Clash/Mihomo YAML config */
+/** Default proxy groups used only when the source has none of its own. */
+function defaultClashGroups(proxyNames) {
+  return [
+    {
+      name: '🚀 节点选择',
+      type: 'select',
+      proxies: ['♻️ 自动选择', ...proxyNames],
+    },
+    {
+      name: '♻️ 自动选择',
+      type: 'url-test',
+      url: 'https://www.gstatic.com/generate_204',
+      interval: 300,
+      tolerance: 50,
+      proxies: proxyNames,
+    },
+    {
+      name: '🐟 漏网之鱼',
+      type: 'select',
+      proxies: ['🚀 节点选择', 'DIRECT', ...proxyNames],
+    },
+  ];
+}
+
+/** Default fallback rules used only when the source has none of its own. */
+function defaultClashRules(catchAll) {
+  return [
+    'GEOIP,PRIVATE,DIRECT,no-resolve',
+    'GEOIP,CN,DIRECT',
+    `MATCH,${catchAll}`,
+  ];
+}
+
+/** Translate Sing-box group outbounds into Clash proxy-groups. */
+function singboxGroupsToClash(groups) {
+  const typeMap = { selector: 'select', urltest: 'url-test', loadbalance: 'load-balance', relay: 'relay' };
+  return groups
+    .filter(g => typeMap[g.type])
+    .map(g => {
+      const pg = { name: g.tag, type: typeMap[g.type], proxies: g.outbounds || [] };
+      if (g.type === 'urltest') {
+        if (g.url) pg.url = g.url;
+        if (g.interval != null) pg.interval = parseInterval(g.interval);
+        if (g.tolerance != null) pg.tolerance = g.tolerance;
+      } else if (g.type === 'loadbalance') {
+        if (g.url) pg.url = g.url;
+        if (g.interval != null) pg.interval = parseInterval(g.interval);
+      }
+      return pg;
+    });
+}
+
+/** Sing-box durations ("5m", "300s") -> Clash seconds (number). */
+function parseInterval(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v !== 'string') return 300;
+  const m = v.trim().match(/^(\d+)\s*(s|m|h)?$/);
+  if (!m) return 300;
+  const n = parseInt(m[1], 10);
+  const u = m[2];
+  if (u === 'm') return n * 60;
+  if (u === 'h') return n * 3600;
+  return n;
+}
+
+/**
+ * Generate Clash/Mihomo YAML config.
+ *
+ * Routing rules and proxy groups are PRESERVED from the source subscription
+ * when present (Clash->Clash uses them verbatim; Sing-box->Clash translates the
+ * groups). Defaults are only injected when the source provided neither — this
+ * stops us from throwing away a user's hand-tuned rules and replacing them
+ * with hard-coded ones.
+ */
 function genClash(nodes, options = {}) {
+  const meta = options.meta || {};
   const proxies = nodes.map(nodeToClashProxy).filter(Boolean);
   const proxyNames = proxies.map(p => p.name);
 
+  // Proxy groups: prefer source; translate if cross-format; else default.
+  let proxyGroups;
+  if (meta.format === 'clash' && Array.isArray(meta.proxyGroups)) {
+    proxyGroups = meta.proxyGroups;
+  } else if (meta.format === 'singbox' && Array.isArray(meta.groups)) {
+    proxyGroups = singboxGroupsToClash(meta.groups);
+  } else {
+    proxyGroups = defaultClashGroups(proxyNames);
+  }
+
+  // Routing rules: only Clash->Clash carries them (no rule-schema translation
+  // across formats yet, so cross-format falls back to defaults below).
+  const rules = (meta.format === 'clash' && Array.isArray(meta.rules)) ? meta.rules : null;
+  const ruleProviders = meta.ruleProviders || null;
+
   const config = {
     'proxies': proxies,
-    'proxy-groups': [
-      {
-        name: '🚀 节点选择',
-        type: 'select',
-        proxies: ['♻️ 自动选择', ...proxyNames],
-      },
-      {
-        name: '♻️ 自动选择',
-        type: 'url-test',
-        url: 'https://www.gstatic.com/generate_204',
-        interval: 300,
-        tolerance: 50,
-        proxies: proxyNames,
-      },
-      {
-        name: '🐟 漏网之鱼',
-        type: 'select',
-        proxies: ['🚀 节点选择', 'DIRECT', ...proxyNames],
-      },
-    ],
-    'rules': [
-      'GEOIP,PRIVATE,DIRECT,no-resolve',
-      'GEOIP,CN,DIRECT',
-      'MATCH,🐟 漏网之鱼',
-    ],
+    'proxy-groups': proxyGroups,
   };
+  if (rules) config.rules = rules;
+  if (ruleProviders) config['rule-providers'] = ruleProviders;
 
-  // Add rule-providers and other common config
+  if (!rules) {
+    const catchAll = (proxyGroups[0] && proxyGroups[0].name) || 'DIRECT';
+    config.rules = defaultClashRules(catchAll);
+  }
+
   const header = {
     'port': 7890,
     'socks-port': 7891,
@@ -105,7 +176,7 @@ function genClash(nodes, options = {}) {
     'mode': 'rule',
     'log-level': 'info',
     'external-controller': '127.0.0.1:9090',
-    'dns': {
+    'dns': meta.dns || {
       'enable': true,
       'ipv6': false,
       'enhanced-mode': 'fake-ip',
@@ -113,6 +184,7 @@ function genClash(nodes, options = {}) {
       'fallback': ['8.8.8.8', '1.1.1.1'],
     },
   };
+  if (meta.clashApi) header['clash-api'] = meta.clashApi;
 
   const fullConfig = { ...header, ...config };
   return yaml.dump(fullConfig, { lineWidth: -1, quotingType: '"' });
@@ -247,24 +319,130 @@ function nodeToClashProxy(n) {
   }
 }
 
-/** Generate Sing-box JSON config */
+/** Default group outbounds used only when the source has none of its own. */
+function defaultSingboxGroups(tags) {
+  return [
+    {
+      type: 'selector',
+      tag: '🚀 节点选择',
+      outbounds: ['♻️ 自动选择', ...tags],
+      default: tags[0] || 'direct',
+    },
+    {
+      type: 'urltest',
+      tag: '♻️ 自动选择',
+      outbounds: tags,
+      url: 'https://www.gstatic.com/generate_204',
+      interval: '5m',
+    },
+    { type: 'direct', tag: 'direct' },
+    { type: 'reject', tag: 'block' },
+    { type: 'dns', tag: 'dns-out' },
+  ];
+}
+
+/** Default route used only when the source has none of its own.
+ *  `finalTag` points the catch-all at a group that actually exists (the first
+ *  group we emitted), so a translated/cross-format config never routes to a
+ *  missing selector. */
+function defaultSingboxRoute(finalTag) {
+  const final = finalTag || '🚀 节点选择';
+  return {
+    rules: [
+      { protocol: 'dns', outbound: 'dns-out' },
+      { ip_is_private: true, outbound: 'direct' },
+      { clash_mode: 'direct', outbound: 'direct' },
+      { clash_mode: 'global', outbound: final },
+    ],
+    final,
+    auto_detect_interface: true,
+  };
+}
+
+/** Default dns block. */
+function defaultDns() {
+  return {
+    servers: [
+      { tag: 'google', address: 'tls://8.8.8.8' },
+      { tag: 'local', address: '223.5.5.5', detour: 'direct' },
+    ],
+    rules: [
+      { outbound: 'any', server: 'local' },
+      { clash_mode: 'global', server: 'google' },
+      { clash_mode: 'direct', server: 'local' },
+    ],
+  };
+}
+
+/** Translate Clash proxy-groups into Sing-box group outbounds. */
+function clashGroupsToSingbox(groups) {
+  const typeMap = { select: 'selector', 'url-test': 'urltest', 'load-balance': 'loadbalance', relay: 'selector' };
+  return groups.map(g => {
+    const type = typeMap[g.type] || g.type;
+    const ob = { type, tag: g.name, outbounds: g.proxies || [] };
+    if (g.type === 'url-test') {
+      if (g.url) ob.url = g.url;
+      if (g.interval != null) ob.interval = `${g.interval}s`;
+      if (g.tolerance != null) ob.tolerance = `${g.tolerance}ms`;
+    } else if (g.type === 'load-balance') {
+      if (g.url) ob.url = g.url;
+      if (g.interval != null) ob.interval = `${g.interval}s`;
+    } else if (g.type === 'select' || g.type === 'relay') {
+      ob.default = (g.proxies && g.proxies[0]) || 'direct';
+    }
+    return ob;
+  });
+}
+
+/**
+ * Generate Sing-box JSON config.
+ *
+ * Routing rules and proxy groups are PRESERVED from the source subscription
+ * when present (Sing-box->Sing-box uses them verbatim; Clash->Sing-box
+ * translates the groups). Defaults are only injected when the source provided
+ * neither — this stops us from discarding a user's rules/groups and replacing
+ * them with hard-coded ones.
+ */
 function genSingbox(nodes, options = {}) {
+  const meta = options.meta || {};
   const outbounds = nodes.map(nodeToSingboxOutbound).filter(Boolean);
   const tags = outbounds.map(o => o.tag);
 
+  // Group outbounds: prefer source; translate if cross-format; else default.
+  let groups;
+  if (meta.format === 'singbox' && Array.isArray(meta.groups)) {
+    groups = meta.groups;
+  } else if (meta.format === 'clash' && Array.isArray(meta.proxyGroups)) {
+    groups = clashGroupsToSingbox(meta.proxyGroups);
+  } else {
+    groups = defaultSingboxGroups(tags);
+  }
+
+  // Ensure required structural outbounds still exist (source may omit them).
+  const seen = new Set(groups.map(g => g.tag));
+  const extra = [];
+  if (!seen.has('direct')) extra.push({ type: 'direct', tag: 'direct' });
+  if (!seen.has('block')) extra.push({ type: 'reject', tag: 'block' });
+  if (!seen.has('dns-out')) extra.push({ type: 'dns', tag: 'dns-out' });
+
+  // Route: only Sing-box->Sing-box carries the rules (no rule-schema
+  // translation across formats yet, so cross-format falls back to defaults).
+  let route;
+  if (meta.format === 'singbox' && meta.route) {
+    route = {
+      rules: Array.isArray(meta.route.rules) ? meta.route.rules : [],
+      final: meta.route.final || '🚀 节点选择',
+    };
+    if (meta.route.rule_set) route.rule_set = meta.route.rule_set;
+    if (meta.route.auto_detect_interface != null) route.auto_detect_interface = meta.route.auto_detect_interface;
+  } else {
+    const primary = (groups[0] && groups[0].tag) || 'direct';
+    route = defaultSingboxRoute(primary);
+  }
+
   const config = {
     log: { level: 'info' },
-    dns: {
-      servers: [
-        { tag: 'google', address: 'tls://8.8.8.8' },
-        { tag: 'local', address: '223.5.5.5', detour: 'direct' },
-      ],
-      rules: [
-        { outbound: 'any', server: 'local' },
-        { clash_mode: 'global', server: 'google' },
-        { clash_mode: 'direct', server: 'local' },
-      ],
-    },
+    ...(meta.dns ? { dns: meta.dns } : { dns: defaultDns() }),
     inbounds: [
       {
         type: 'mixed',
@@ -273,36 +451,10 @@ function genSingbox(nodes, options = {}) {
         listen_port: 7890,
       },
     ],
-    outbounds: [
-      ...outbounds,
-      {
-        type: 'selector',
-        tag: '🚀 节点选择',
-        outbounds: ['♻️ 自动选择', ...tags],
-        default: tags[0] || 'direct',
-      },
-      {
-        type: 'urltest',
-        tag: '♻️ 自动选择',
-        outbounds: tags,
-        url: 'https://www.gstatic.com/generate_204',
-        interval: '5m',
-      },
-      { type: 'direct', tag: 'direct' },
-      { type: 'reject', tag: 'block' },
-      { type: 'dns', tag: 'dns-out' },
-    ],
-    route: {
-      rules: [
-        { protocol: 'dns', outbound: 'dns-out' },
-        { ip_is_private: true, outbound: 'direct' },
-        { clash_mode: 'direct', outbound: 'direct' },
-        { clash_mode: 'global', outbound: '🚀 节点选择' },
-      ],
-      final: '🚀 节点选择',
-      auto_detect_interface: true,
-    },
+    outbounds: [...outbounds, ...groups, ...extra],
+    route,
   };
+  if (meta.clashApi) config.experimental = { clash_api: meta.clashApi };
 
   return JSON.stringify(config, null, 2);
 }
