@@ -1,22 +1,10 @@
-# =============================================================
-# SubConvert — Cloudflare Pages 配置模板
-# =============================================================
-# 这是示例模板，本文件不会被 Cloudflare 读取（需重命名为 wrangler.toml 才生效）。
-# 完整部署步骤与 KV 绑定取舍说明见 README.md「方式一：通过 GitHub 导入 + wrangler.toml」。
-# 简言之：在 Cloudflare 建一个 KV 命名空间记下 ID → 把本文件重命名为 wrangler.toml
-# → 把下方 id 占位符换成你的 KV ID 并提交 → 在 Dashboard「Connect to Git」连接即可。
-# 注意：wrangler.toml 已被 .gitignore 忽略，不会进公开仓库，KV ID 不会泄露。
+# 重命名为 wrangler.toml 后生效；name 不影响 Git 导入时的项目名（以 Dashboard 填写为准）。
+# KV 变量名 SUBCONVERT_KV 必须固定，把下方 id 换成你的 KV 命名空间 ID 即可。
 
-# name：仅用于 `wrangler pages deploy`（Direct Upload）和本地 `wrangler pages dev`。
-# ⚠️ 它【不会】覆盖你在 Dashboard「Connect to Git」时输入的自定义项目名——
-#   使用 GitHub 连接（Git 集成）部署时，项目名以你在 Dashboard 填写的为准，
-#   这个 name 字段被忽略。你可以把它改成自己喜欢的名字（仅限字母数字和连字符），
-#   也可以保持原样；只有当你改用 Wrangler CLI 直接上传时它才会生效。
 name = "subconvert"
 pages_build_output_dir = "public"
 compatibility_date = "2024-11-01"
 
-# KV 命名空间绑定（变量名必须固定为 SUBCONVERT_KV，代码依赖此名称）
 [[kv_namespaces]]
 binding = "SUBCONVERT_KV"
 id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
