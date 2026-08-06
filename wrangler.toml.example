@@ -1,35 +1,11 @@
 # =============================================================
-# SubConvert — Cloudflare Pages 配置文件（示例模板）
+# SubConvert — Cloudflare Pages 配置模板
 # =============================================================
-#
-# 用途：
-#   让 Fork 本仓库的用户可以「一次性」通过 GitHub 连接 Cloudflare Pages
-#   并完成部署（含 KV 绑定），无需在 Dashboard 手动绑定。
-#
-# 使用方法（务必按顺序）：
-#   1. 在 Cloudflare Dashboard 左侧「KV」→「Create a namespace」创建一个
-#      KV 命名空间（名字随意，例如 subconvert-kv），记下它生成的 **ID**。
-#   2. 把本文件复制 / 重命名为  wrangler.toml  （即去掉 .example 后缀）。
-#   3. 把下方 `id` 的占位符 REPLACE_WITH_YOUR_KV_NAMESPACE_ID
-#      替换成你在第 1 步拿到的 KV 命名空间 ID。
-#   4. 提交本次改动（本地提交即可，注意 wrangler.toml 已被 .gitignore 忽略，
-#      不会被推到公开仓库，KV ID 不会泄露）。
-#   5. 在 Cloudflare Pages「Connect to Git」连接你的仓库：
-#        - Framework preset：None
-#        - Build command：留空
-#        - Build output directory：public
-#      wrangler.toml 会被当作项目配置的「真源 (source of truth)」，
-#      其中的 KV 绑定随之自动生效，首次部署即可正常使用。
-#
-# 重要说明：
-#   - 本仓库默认**不包含**激活的 wrangler.toml（它被 .gitignore 忽略）。
-#     本 .example 文件只是模板，本身不会被 Cloudflare 读取，
-#     也**不会**锁死 Dashboard 绑定界面。
-#   - 只有当你重命名成 wrangler.toml 后才会生效。届时 KV 绑定改由文件管理，
-#     Dashboard 的绑定相关界面会变为只读——这是有意为之：
-#     今后修改绑定/配置都通过编辑此文件并 git push，而非 Dashboard。
-#   - 变量名 `SUBCONVERT_KV` **必须保持不变**，代码依赖它读取数据。
-# =============================================================
+# 这是示例模板，本文件不会被 Cloudflare 读取（需重命名为 wrangler.toml 才生效）。
+# 完整部署步骤与 KV 绑定取舍说明见 README.md「方式一：通过 GitHub 导入 + wrangler.toml」。
+# 简言之：在 Cloudflare 建一个 KV 命名空间记下 ID → 把本文件重命名为 wrangler.toml
+# → 把下方 id 占位符换成你的 KV ID 并提交 → 在 Dashboard「Connect to Git」连接即可。
+# 注意：wrangler.toml 已被 .gitignore 忽略，不会进公开仓库，KV ID 不会泄露。
 
 # name：仅用于 `wrangler pages deploy`（Direct Upload）和本地 `wrangler pages dev`。
 # ⚠️ 它【不会】覆盖你在 Dashboard「Connect to Git」时输入的自定义项目名——
