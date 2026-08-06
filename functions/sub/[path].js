@@ -49,14 +49,17 @@ export async function onRequestGet(context) {
   // Build response with appropriate headers
   const headers = {
     'Content-Type': result.contentType,
-    // Force client-side revalidation on every fetch (no-cache allows storage
-    // but requires revalidation), so each request returns to this Worker and
-    // is served from the server-side edge cache (caches.default) when warm,
-    // only re-fetching the source on a cache miss.
-    // IMPORTANT: must NOT be `no-store` — per Cloudflare docs, cache.put()
-    // returns 413 ("Cache-Control instructs not to cache") and the edge cache
-    // would silently stop working, making every request hit the slow source.
-    'Cache-Control': 'no-cache',
+    // No Cache-Control header is set on purpose: every explicit value we tried
+    // was wrong for "rely solely on the server-side edge cache".
+    //  - no-store  -> Cloudflare cache.put() returns 413 and the edge cache
+    //                 silently stops working (every request re-fetches source)
+    //  - no-cache  -> edge entry has ~0 freshness, cache.match() misses next time
+    //  - max-age=N -> client and edge TTL are coupled, single-user refresh defeats it
+    // With NO cache-control directive (and no Expires), Cloudflare applies its
+    // default Edge TTL of 120 min for 200 responses, so caches.default stores a
+    // warm entry for up to ~2h. Client-side caching is left to the client; per
+    // the project's decision the client refresh interval is not something we try
+    // to control from here.
     // Subscription info header (used by Clash clients)
     'Subscription-Userinfo': `upload=0; download=0; total=0; expire=0`,
     // Allow cross-origin access
