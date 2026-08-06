@@ -14,12 +14,6 @@ import { processSubscriptionRequest } from '../_lib/convert.js';
 import { incrementAccess } from '../_lib/store.js';
 import { handleCORS } from '../_lib/response.js';
 
-// How long a converted subscription stays cached at the edge.
-// The client refresh interval is 6 min (Profile-Update-Interval), so a
-// 5-minute cache serves almost every refresh from the edge without
-// re-fetching the (often slow) source subscription.
-const CACHE_TTL = 300;
-
 export async function onRequestGet(context) {
   const { params, env, request } = context;
 
@@ -55,12 +49,13 @@ export async function onRequestGet(context) {
   // Build response with appropriate headers
   const headers = {
     'Content-Type': result.contentType,
-    // Allow edge/CDN caching for CACHE_TTL seconds so repeated client
-    // fetches are served instantly without hitting the source again.
-    'Cache-Control': `public, max-age=${CACHE_TTL}`,
+    // No client-side caching: every fetch reaches this Worker, which serves
+    // from the server-side edge cache (caches.default) when warm and only
+    // re-fetches the source on a cache miss. This keeps output as fresh as
+    // the source and avoids stale client-held copies bypassing the edge cache.
+    'Cache-Control': 'no-store',
     // Subscription info header (used by Clash clients)
     'Subscription-Userinfo': `upload=0; download=0; total=0; expire=0`,
-    'Profile-Update-Interval': '6',
     // Allow cross-origin access
     'Access-Control-Allow-Origin': '*',
   };
