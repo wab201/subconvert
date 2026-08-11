@@ -60,13 +60,19 @@ export async function onRequestGet(context) {
     // warm entry for up to ~2h. Client-side caching is left to the client; per
     // the project's decision the client refresh interval is not something we try
     // to control from here.
-    // Subscription-Userinfo: restored from the source subscription so the
-    // client keeps seeing traffic usage / expiry. Falls back to zeros when
-    // the source does not report it.
-    'Subscription-Userinfo': result.userInfo || 'upload=0; download=0; total=0; expire=0',
     // Allow cross-origin access
     'Access-Control-Allow-Origin': '*',
   };
+
+  // Subscription-Userinfo: forwarded verbatim from the source subscription so the
+  // client keeps seeing traffic usage / expiry in EXACTLY the source's unit and
+  // decimal format (GB, bytes, whatever the provider reports). We do NOT reformat
+  // or re-round the numbers, and we do NOT invent placeholder values: if the
+  // source does not report this header we simply omit it, so the output stays
+  // strictly consistent with the source instead of showing misleading zeros.
+  if (result.userInfo) {
+    headers['Subscription-Userinfo'] = result.userInfo;
+  }
 
   // Carry the source's management-page URL through (if any), so clients can
   // open the subscription's dashboard directly.
