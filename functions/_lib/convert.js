@@ -14,7 +14,9 @@ const DEFAULT_UA = 'clash-verge/v2.5.1';
  * Fetch source subscription content.
  * @param {string} url - Source subscription URL
  * @param {string} userAgent - Optional custom User-Agent
- * @returns {Promise<string>} Raw subscription content
+ * @returns {Promise<{content: string, headers: object}>} Raw subscription content
+ *   plus any subscription-metadata headers carried by the source (e.g.
+ *   Subscription-Userinfo, profile-web-page-url).
  */
 export async function fetchSubscription(url, userAgent) {
   const ua = userAgent || DEFAULT_UA;
@@ -44,7 +46,18 @@ export async function fetchSubscription(url, userAgent) {
     throw new Error('Subscription content is empty');
   }
 
-  return content;
+  // Capture subscription metadata from the source response. Standard proxy
+  // providers report traffic usage and expiry via the `Subscription-Userinfo`
+  // header; some also expose a management page via `profile-web-page-url`.
+  // Re-emitting these on our own output keeps the information intact after
+  // conversion instead of being discarded.
+  const headers = {};
+  const userInfo = resp.headers.get('Subscription-Userinfo');
+  if (userInfo) headers.userInfo = userInfo;
+  const webPageUrl = resp.headers.get('profile-web-page-url');
+  if (webPageUrl) headers.webPageUrl = webPageUrl;
+
+  return { content, headers };
 }
 
 /**
@@ -91,8 +104,11 @@ export async function processSubscriptionRequest(kv, path) {
 
   // Fetch source subscription
   let sourceContent;
+  let sourceHeaders = {};
   try {
-    sourceContent = await fetchSubscription(link.sourceUrl, link.userAgent);
+    const fetched = await fetchSubscription(link.sourceUrl, link.userAgent);
+    sourceContent = fetched.content;
+    sourceHeaders = fetched.headers;
   } catch (e) {
     return { error: 502, message: `Failed to fetch source: ${e.message}` };
   }
@@ -114,5 +130,7 @@ export async function processSubscriptionRequest(kv, path) {
     contentType: result.contentType,
     nodeCount: result.nodeCount,
     sourceFormat: result.sourceFormat,
+    userInfo: sourceHeaders.userInfo || null,
+    webPageUrl: sourceHeaders.webPageUrl || null,
   };
 }

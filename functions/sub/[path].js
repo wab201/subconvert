@@ -60,11 +60,19 @@ export async function onRequestGet(context) {
     // warm entry for up to ~2h. Client-side caching is left to the client; per
     // the project's decision the client refresh interval is not something we try
     // to control from here.
-    // Subscription info header (used by Clash clients)
-    'Subscription-Userinfo': `upload=0; download=0; total=0; expire=0`,
+    // Subscription-Userinfo: restored from the source subscription so the
+    // client keeps seeing traffic usage / expiry. Falls back to zeros when
+    // the source does not report it.
+    'Subscription-Userinfo': result.userInfo || 'upload=0; download=0; total=0; expire=0',
     // Allow cross-origin access
     'Access-Control-Allow-Origin': '*',
   };
+
+  // Carry the source's management-page URL through (if any), so clients can
+  // open the subscription's dashboard directly.
+  if (result.webPageUrl) {
+    headers['profile-web-page-url'] = result.webPageUrl;
+  }
 
   const response = new Response(result.content, {
     status: 200,
